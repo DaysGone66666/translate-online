@@ -1,0 +1,183 @@
+// Translate Online - 后台服务线程
+
+// ==================== 存储 Key 常量 ====================
+const STORAGE_KEYS = {
+  DEEPSEEK_KEY: 'deepseek_api_key',
+  ENGINE: 'translation_engine', // 'free' | 'deepseek'
+  TARGET_LANG: 'target_language',
+  MODEL: 'deepseek_model',
+  HISTORY: 'translation_history'
+};
+
+// ==================== 安装事件处理 ====================
+chrome.runtime.onInstalled.addListener((details) => {
+  // 初始化默认存储
+  if (details.reason === 'install') {
+    chrome.storage.sync.set({
+      [STORAGE_KEYS.ENGINE]: 'free',
+      [STORAGE_KEYS.TARGET_LANG]: 'zh-CN',
+      [STORAGE_KEYS.MODEL]: 'deepseek-chat'
+    });
+    // 首次安装提示
+    chrome.tabs.create({ url: 'src/options.html' });
+  }
+
+  // 创建右键菜单
+  chrome.contextMenus.create({
+    id: 'translate-selection',
+    title: '翻译选中文本',
+    contexts: ['selection']
+  });
+});
+
+// ==================== 翻译引擎 ====================
+const ENGINES = {
+  async translateFree(text, targetLang) {
+    const sourceLang = 'auto'; // 自动检测
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.responseStatus === 200) {
+      return { success: true, text: data.responseData.translatedText };
+    }
+    // 429 限频处理
+    if (response.status === 429 || data.responseStatus === 429) {
+      return { success: false, error: 'rate_limited', message: '免费引擎请求频繁，请稍后重试或切换为 DeepSeek' };
+    }
+    return { success: false, error: 'api_error', message: data.responseDetails || '翻译失败' };
+  },
+
+  async translateDeepSeek(text, targetLang, apiKey, model) {
+    const url = 'https://api.deepseek.com/v1/chat/completions';
+    const systemPrompt = `Translate the following text to ${targetLang}. Respond with only the translation, no explanations.`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model || 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: text }
+        ],
+        temperature: 0.3,
+        max_tokens: 4096
+      })
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        return { success: false, error: 'unauthorized', message: 'API Key 无效，请检查设置' };
+      }
+      if (response.status === 429) {
+        return { success: false, error: 'rate_limited', message: 'DeepSeek API 请求过于频繁，请稍后重试' };
+      }
+      return { success: false, error: 'api_error', message: `DeepSeek API 错误 (${response.status})` };
+    }
+
+    const data = await response.json();
+    const translatedText = data.choices[0].message.content.trim();
+    return { success: true, text: translatedText };
+  }
+};
+
+// ==================== 统一翻译函数 ====================
+async function translate(text, targetLang) {
+  const MAX_LENGTH = 2000;
+  if (text.length > MAX_LENGTH) {
+    text = text.slice(0, MAX_LENGTH);
+  }
+
+  const storage = await chrome.storage.sync.get([
+    STORAGE_KEYS.ENGINE,
+    STORAGE_KEYS.DEEPSEEK_KEY,
+    STORAGE_KEYS.MODEL
+  ]);
+
+  const engine = storage[STORAGE_KEYS.ENGINE] || 'free';
+
+  if (engine === 'deepseek') {
+    const apiKey = storage[STORAGE_KEYS.DEEPSEEK_KEY];
+    if (!apiKey) {
+      return { success: false, error: 'no_key', message: '未配置 API Key，请在设置中配置或切换为免费引擎', needsConfig: true };
+    }
+    return await ENGINES.translateDeepSeek(text, targetLang, apiKey, storage[STORAGE_KEYS.MODEL]);
+  }
+
+  return await ENGINES.translateFree(text, targetLang);
+}
+
+// ==================== 消息处理器 ====================
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  switch (request.type) {
+    case 'translate':
+      (async () => {
+        const storage = await chrome.storage.sync.get([STORAGE_KEYS.TARGET_LANG]);
+        const result = await translate(request.text, storage[STORAGE_KEYS.TARGET_LANG] || 'zh-CN');
+        sendResponse(result);
+      })();
+      return true;
+
+    case 'open-sidebar':
+      chrome.sidePanel.open({ tabId: sender.tab.id });
+      return false;
+
+    case 'get-history':
+      (async () => {
+        const storage = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
+        sendResponse(storage[STORAGE_KEYS.HISTORY] || []);
+      })();
+      return true;
+
+    case 'save-to-history':
+      (async () => {
+        const storage = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
+        const history = storage[STORAGE_KEYS.HISTORY] || [];
+        history.unshift({
+          id: Date.now(),
+          original: request.text,
+          translation: request.translation,
+          sourceLang: request.sourceLang || 'auto',
+          targetLang: request.targetLang || 'zh-CN',
+          timestamp: Date.now()
+        });
+        if (history.length > 100) history.length = 100;
+        await chrome.storage.local.set({ [STORAGE_KEYS.HISTORY]: history });
+        sendResponse({ success: true });
+      })();
+      return true;
+
+    case 'clear-history':
+      (async () => {
+        await chrome.storage.local.set({ [STORAGE_KEYS.HISTORY]: [] });
+        sendResponse({ success: true });
+      })();
+      return true;
+
+    case 'open-options':
+      chrome.runtime.openOptionsPage();
+      return false;
+  }
+});
+
+// ==================== 右键菜单事件 ====================
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'translate-selection' && info.selectionText) {
+    chrome.tabs.sendMessage(tab.id, {
+      type: 'translate-selection',
+      text: info.selectionText
+    });
+  }
+});
+
+// ==================== 快捷键命令 ====================
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'translate-selection') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'translate-selection-command' });
+    });
+  }
+});
