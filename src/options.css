@@ -290,3 +290,17 @@ body::before {
   font-size: 12px;
   margin-top: 6px;
 }
+
+.shortcut-footnote {
+  font-size: 12px;
+  color: #9CA3AF;
+  margin-top: 8px;
+}
+
+.shortcut-footnote a {
+  color: #2563EB;
+  text-decoration: none;
+}
+.shortcut-footnote a:hover {
+  text-decoration: underline;
+}

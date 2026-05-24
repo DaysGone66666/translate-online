@@ -38,6 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-reset-shortcut').addEventListener('click', resetShortcut);
   document.getElementById('btn-save-shortcut').addEventListener('click', saveShortcut);
   document.getElementById('btn-cancel-shortcut').addEventListener('click', stopRecording);
+  document.getElementById('link-edge-shortcuts').addEventListener('click', (e) => {
+    e.preventDefault();
+    // 提示用户手动打开快捷键设置
+    showStatus('请在浏览器地址栏输入 edge://extensions/shortcuts 进入快捷键设置', 'info');
+  });
 
   // 芯片样式同步
   document.querySelectorAll('.chip input[type="checkbox"]').forEach(cb => {
@@ -76,19 +81,24 @@ function loadShortcut() {
   chrome.commands.getAll((commands) => {
     const cmd = commands.find(c => c.name === COMMAND_NAME);
     if (cmd) {
-      const display = cmd.shortcut || '未设置';
+      // 解析快捷键，转为友好显示格式（字母大写）
+      const raw = cmd.shortcut || '未设置';
+      const display = raw.replace(/\+([a-z])/g, (_, c) => '+' + c.toUpperCase());
       document.getElementById('shortcut-display').textContent = display;
     }
   });
 }
 
-function shortcutToDisplay(keys) {
+function shortcutKeysToString(keys, forDisplay) {
   const parts = [];
   if (keys.ctrl) parts.push('Ctrl');
   if (keys.alt) parts.push('Alt');
   if (keys.shift) parts.push('Shift');
   if (keys.meta) parts.push('Command');
-  if (keys.key) parts.push(keys.key.toUpperCase());
+  if (keys.key) {
+    // 显示用大写（如 Ctrl+Shift+E），API 用小写（chrome.commands.update 要求字母小写）
+    parts.push(forDisplay ? keys.key.toUpperCase() : keys.key.toLowerCase());
+  }
   return parts.join('+');
 }
 
@@ -133,7 +143,8 @@ function onRecordKeydown(event) {
     recordedKeys.key = key;
   }
 
-  document.getElementById('shortcut-keys').textContent = shortcutToDisplay(recordedKeys);
+  const display = shortcutKeysToString(recordedKeys, true);
+  document.getElementById('shortcut-keys').textContent = display || '等待输入...';
 }
 
 function saveShortcut() {
@@ -146,28 +157,37 @@ function saveShortcut() {
     return;
   }
 
-  const shortcut = shortcutToDisplay(recordedKeys);
+  const shortcutApi = shortcutKeysToString(recordedKeys, false);
+  const shortcutDisplay = shortcutKeysToString(recordedKeys, true);
+
+  if (typeof chrome.commands.update !== 'function') {
+    showStatus('当前浏览器不支持动态修改快捷键，请前往 edge://extensions/shortcuts 手动设置', 'error');
+    return;
+  }
 
   chrome.commands.update({
     name: COMMAND_NAME,
-    shortcut: shortcut
+    shortcut: shortcutApi
   }, () => {
     if (chrome.runtime.lastError) {
       showStatus(`快捷键无效: ${chrome.runtime.lastError.message}`, 'error');
     } else {
-      document.getElementById('shortcut-display').textContent = shortcut;
-      showStatus(`快捷键已设置为 ${shortcut}`, 'success');
+      document.getElementById('shortcut-display').textContent = shortcutDisplay;
+      showStatus(`快捷键已设置为 ${shortcutDisplay}`, 'success');
       stopRecording();
     }
   });
 }
 
 function resetShortcut() {
+  if (typeof chrome.commands.reset !== 'function') {
+    showStatus('请前往 edge://extensions/shortcuts 手动重置快捷键', 'info');
+    return;
+  }
   chrome.commands.reset(COMMAND_NAME, () => {
     if (chrome.runtime.lastError) {
       showStatus(`重置失败: ${chrome.runtime.lastError.message}`, 'error');
     } else {
-      // 重新读取当前的快捷键（重置后为 manifest 中的默认值）
       loadShortcut();
       showStatus('快捷键已重置为默认值', 'success');
     }
