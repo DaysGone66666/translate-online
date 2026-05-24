@@ -6,7 +6,9 @@ const STORAGE_KEYS = {
   ENGINE: 'translation_engine', // 'free' | 'deepseek'
   TARGET_LANG: 'target_language',
   MODEL: 'deepseek_model',
-  HISTORY: 'translation_history'
+  HISTORY: 'translation_history',
+  API_URL: 'deepseek_api_url',
+  CONTEXT_MENU: 'context_menu_enabled'
 };
 
 // ==================== 安装事件处理 ====================
@@ -59,8 +61,8 @@ const ENGINES = {
     }
   },
 
-  async translateDeepSeek(text, targetLang, apiKey, model) {
-    const url = 'https://api.deepseek.com/v1/chat/completions';
+  async translateDeepSeek(text, targetLang, apiKey, model, apiUrl) {
+    const url = apiUrl ? `${apiUrl.replace(/\/$/, '')}/v1/chat/completions` : 'https://api.deepseek.com/v1/chat/completions';
     const systemPrompt = `Translate the following text to ${targetLang}. Respond with only the translation, no explanations.`;
 
     try {
@@ -110,7 +112,8 @@ async function translate(text, targetLang) {
   const storage = await chrome.storage.sync.get([
     STORAGE_KEYS.ENGINE,
     STORAGE_KEYS.DEEPSEEK_KEY,
-    STORAGE_KEYS.MODEL
+    STORAGE_KEYS.MODEL,
+    STORAGE_KEYS.API_URL
   ]);
 
   const engine = storage[STORAGE_KEYS.ENGINE] || 'free';
@@ -118,9 +121,14 @@ async function translate(text, targetLang) {
   if (engine === 'deepseek') {
     const apiKey = storage[STORAGE_KEYS.DEEPSEEK_KEY];
     if (!apiKey) {
-      return { success: false, error: 'no_key', message: '未配置 API Key，请在设置中配置或切换为免费引擎', needsConfig: true };
+      // 自动回退到免费引擎
+      const result = await ENGINES.translateFree(text, targetLang);
+      if (result.success) {
+        result._note = '使用免费引擎（未配置 DeepSeek Key）';
+      }
+      return result;
     }
-    return await ENGINES.translateDeepSeek(text, targetLang, apiKey, storage[STORAGE_KEYS.MODEL]);
+    return await ENGINES.translateDeepSeek(text, targetLang, apiKey, storage[STORAGE_KEYS.MODEL], storage[STORAGE_KEYS.API_URL]);
   }
 
   return await ENGINES.translateFree(text, targetLang);
@@ -203,5 +211,28 @@ chrome.commands.onCommand.addListener((command) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       chrome.tabs.sendMessage(tabs[0].id, { type: 'translate-selection-command' });
     });
+  }
+});
+
+// ==================== 监听配置变更，刷新上下文菜单 ====================
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes[STORAGE_KEYS.CONTEXT_MENU]) {
+    if (changes[STORAGE_KEYS.CONTEXT_MENU].newValue) {
+      try {
+        chrome.contextMenus.create({
+          id: 'translate-selection',
+          title: '翻译选中文本',
+          contexts: ['selection']
+        });
+      } catch (e) {
+        // 菜单可能已存在，忽略
+      }
+    } else {
+      try {
+        chrome.contextMenus.remove('translate-selection');
+      } catch (e) {
+        // 菜单可能已被移除，忽略
+      }
+    }
   }
 });
