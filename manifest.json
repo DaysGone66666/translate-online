@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Translate Online",
+  "version": "1.0.0",
+  "description": "划词翻译工具，支持 DeepSeek API 和免费翻译引擎",
+  "permissions": ["storage", "sidePanel", "contextMenus", "activeTab"],
+  "background": {
+    "service_worker": "src/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content-script.js"],
+      "css": ["src/popup.css"]
+    }
+  ],
+  "side_panel": {
+    "default_path": "src/sidebar.html"
+  },
+  "options_page": "src/options.html",
+  "commands": {
+    "translate-selection": {
+      "suggested_key": { "default": "Alt+T" },
+      "description": "翻译选中文本"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
