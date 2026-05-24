@@ -1,0 +1,84 @@
+/* src/popup.css */
+.to-popup-container {
+  position: absolute;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.to-popup-card {
+  pointer-events: auto;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 240px;
+  max-width: 360px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+
+.to-popup-label {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.to-popup-original {
+  font-weight: 500;
+  color: #333;
+  word-break: break-word;
+}
+
+.to-popup-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 8px 0;
+}
+
+.to-popup-translation {
+  color: #333;
+  word-break: break-word;
+}
+
+.to-popup-loading {
+  color: #999;
+  font-style: italic;
+}
+
+.to-popup-error {
+  color: #d32f2f;
+  font-size: 13px;
+}
+
+.to-popup-link {
+  color: #4A90D9;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.to-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.to-popup-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.to-popup-btn:hover {
+  background: #f5f5f5;
+}
