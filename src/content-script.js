@@ -66,23 +66,30 @@ function createPopup(text, rect) {
   popupContainer.className = 'to-popup-container';
   popupContainer.innerHTML = `
     <div class="to-popup-card">
-      <div class="to-popup-section">
-        <div class="to-popup-label">原文</div>
-        <div class="to-popup-original">${escapeHtml(text)}</div>
+      <div class="to-popup-header">
+        <span class="to-popup-lang-tag">EN → 中文</span>
+        <div class="to-popup-header-actions">
+          <button class="to-popup-header-btn" id="to-btn-speak" title="朗读">🔊</button>
+          <button class="to-popup-header-btn" id="to-btn-sidebar" title="打开侧边栏">☰</button>
+        </div>
       </div>
+      <div class="to-popup-label">原文</div>
+      <div class="to-popup-original">${escapeHtml(text)}</div>
       <div class="to-popup-divider"></div>
-      <div class="to-popup-section">
-        <div class="to-popup-label">译文</div>
+      <div class="to-popup-label">译文</div>
+      <div class="to-popup-translation-wrap">
         <div class="to-popup-translation" id="to-translation-text">
           <span class="to-popup-loading">翻译中...</span>
         </div>
       </div>
-      <div class="to-popup-actions">
-        <button class="to-popup-btn" id="to-btn-speak" title="朗读">🔊</button>
-        <button class="to-popup-btn" id="to-btn-sidebar" title="打开侧边栏">☰</button>
-      </div>
     </div>
   `;
+
+  // 设置 popup 背景图（通过 chrome.runtime.getURL 获取扩展内资源路径）
+  const bgUrl = chrome.runtime.getURL('images/popup-bg.png');
+  popupContainer.style.backgroundImage = `url('${bgUrl}')`;
+  popupContainer.style.backgroundSize = 'cover';
+  popupContainer.style.backgroundPosition = 'center';
 
   document.body.appendChild(popupContainer);
   positionPopup(rect);
