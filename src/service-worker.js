@@ -35,52 +35,68 @@ const ENGINES = {
   async translateFree(text, targetLang) {
     const sourceLang = 'auto'; // 自动检测
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data.responseStatus === 200) {
-      return { success: true, text: data.responseData.translatedText };
+    try {
+      const response = await fetch(url);
+      // 先检查 HTTP 状态码，避免在错误响应上调用 .json()
+      if (!response.ok) {
+        if (response.status === 429) {
+          return { success: false, error: 'rate_limited', message: '免费引擎请求频繁，请稍后重试或切换为 DeepSeek' };
+        }
+        const errorText = await response.text().catch(() => '');
+        return { success: false, error: 'api_error', message: `HTTP ${response.status}: ${errorText || '请求失败'}` };
+      }
+      const data = await response.json();
+      if (data.responseStatus === 200) {
+        return { success: true, text: data.responseData.translatedText };
+      }
+      // 429 限频处理
+      if (data.responseStatus === 429) {
+        return { success: false, error: 'rate_limited', message: '免费引擎请求频繁，请稍后重试或切换为 DeepSeek' };
+      }
+      return { success: false, error: 'api_error', message: data.responseDetails || '翻译失败' };
+    } catch (err) {
+      return { success: false, error: 'network_error', message: `网络请求失败: ${err.message}` };
     }
-    // 429 限频处理
-    if (response.status === 429 || data.responseStatus === 429) {
-      return { success: false, error: 'rate_limited', message: '免费引擎请求频繁，请稍后重试或切换为 DeepSeek' };
-    }
-    return { success: false, error: 'api_error', message: data.responseDetails || '翻译失败' };
   },
 
   async translateDeepSeek(text, targetLang, apiKey, model) {
     const url = 'https://api.deepseek.com/v1/chat/completions';
     const systemPrompt = `Translate the following text to ${targetLang}. Respond with only the translation, no explanations.`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model || 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: text }
-        ],
-        temperature: 0.3,
-        max_tokens: 4096
-      })
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model || 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text }
+          ],
+          temperature: 0.3,
+          max_tokens: 4096
+        })
+      });
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        return { success: false, error: 'unauthorized', message: 'API Key 无效，请检查设置' };
+      if (!response.ok) {
+        if (response.status === 401) {
+          return { success: false, error: 'unauthorized', message: 'API Key 无效，请检查设置' };
+        }
+        if (response.status === 429) {
+          return { success: false, error: 'rate_limited', message: 'DeepSeek API 请求过于频繁，请稍后重试' };
+        }
+        return { success: false, error: 'api_error', message: `DeepSeek API 错误 (${response.status})` };
       }
-      if (response.status === 429) {
-        return { success: false, error: 'rate_limited', message: 'DeepSeek API 请求过于频繁，请稍后重试' };
-      }
-      return { success: false, error: 'api_error', message: `DeepSeek API 错误 (${response.status})` };
+
+      const data = await response.json();
+      const translatedText = data.choices?.[0]?.message?.content?.trim() ?? '';
+      return { success: true, text: translatedText };
+    } catch (err) {
+      return { success: false, error: 'network_error', message: `网络请求失败: ${err.message}` };
     }
-
-    const data = await response.json();
-    const translatedText = data.choices[0].message.content.trim();
-    return { success: true, text: translatedText };
   }
 };
 
@@ -118,7 +134,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const storage = await chrome.storage.sync.get([STORAGE_KEYS.TARGET_LANG]);
         const result = await translate(request.text, storage[STORAGE_KEYS.TARGET_LANG] || 'zh-CN');
         sendResponse(result);
-      })();
+      })().catch(err => {
+        sendResponse({ success: false, error: 'internal_error', message: err.message });
+      });
       return true;
 
     case 'open-sidebar':
@@ -129,7 +147,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       (async () => {
         const storage = await chrome.storage.local.get([STORAGE_KEYS.HISTORY]);
         sendResponse(storage[STORAGE_KEYS.HISTORY] || []);
-      })();
+      })().catch(err => {
+        sendResponse({ success: false, error: 'internal_error', message: err.message });
+      });
       return true;
 
     case 'save-to-history':
@@ -147,14 +167,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (history.length > 100) history.length = 100;
         await chrome.storage.local.set({ [STORAGE_KEYS.HISTORY]: history });
         sendResponse({ success: true });
-      })();
+      })().catch(err => {
+        sendResponse({ success: false, error: 'internal_error', message: err.message });
+      });
       return true;
 
     case 'clear-history':
       (async () => {
         await chrome.storage.local.set({ [STORAGE_KEYS.HISTORY]: [] });
         sendResponse({ success: true });
-      })();
+      })().catch(err => {
+        sendResponse({ success: false, error: 'internal_error', message: err.message });
+      });
       return true;
 
     case 'open-options':
