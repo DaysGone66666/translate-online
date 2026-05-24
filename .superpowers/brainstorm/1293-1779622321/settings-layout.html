@@ -1,0 +1,74 @@
+<h2>设置入口，你倾向哪种？</h2>
+<p class="subtitle">用户在哪里配置 API Key 和语言偏好</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>侧边栏内设置页</h3>
+      <p>侧边栏底部有一个齿轮图标，点击后侧边栏切换到设置视图。不用打开新页面。</p>
+      <div class="mockup" style="margin-top:8px;font-size:13px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;width:280px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between">
+            <span style="font-weight:600">设置</span>
+            <span style="color:#999">✕</span>
+          </div>
+          <div style="padding:12px">
+            <div style="margin-bottom:12px">
+              <div style="font-size:12px;color:#666;margin-bottom:4px">DeepSeek API Key</div>
+              <input type="password" value="sk-xxxxxxxxxxx" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px">
+            </div>
+            <div style="margin-bottom:12px">
+              <div style="font-size:12px;color:#666;margin-bottom:4px">目标语言</div>
+              <select style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px">
+                <option>中文（简体）</option>
+                <option>中文（繁体）</option>
+                <option>English</option>
+                <option>日本語</option>
+              </select>
+            </div>
+            <div style="margin-bottom:12px">
+              <div style="font-size:12px;color:#666;margin-bottom:4px">翻译触发方式</div>
+              <label style="display:block;font-size:13px;margin-bottom:4px"><input type="checkbox" checked> 划词自动翻译</label>
+              <label style="display:block;font-size:13px;margin-bottom:4px"><input type="checkbox" checked> 快捷键 Alt+T</label>
+              <label style="display:block;font-size:13px;margin-bottom:4px"><input type="checkbox" checked> 右键菜单</label>
+            </div>
+            <button style="width:100%;padding:8px;background:#4A90D9;color:#fff;border:none;border-radius:4px">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>独立选项页</h3>
+      <p>标准的 Chrome 扩展选项页（右键扩展图标 → 选项）。在浏览器新标签页中打开完整设置。</p>
+      <div class="mockup" style="margin-top:8px;font-size:13px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;width:400px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="padding:16px">
+            <h3 style="margin:0 0 16px;font-size:16px">Translate Online 设置</h3>
+            <div style="margin-bottom:16px">
+              <div style="font-size:12px;color:#666;margin-bottom:4px">DeepSeek API Key</div>
+              <input type="password" value="sk-xxxxxxxxxxx" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px">
+            </div>
+            <div style="margin-bottom:16px">
+              <div style="font-size:12px;color:#666;margin-bottom:4px">模型选择</div>
+              <select style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px">
+                <option>deepseek-chat</option>
+                <option>deepseek-reasoner</option>
+              </select>
+            </div>
+            <div style="margin-bottom:16px">
+              <div style="font-size:12px;color:#666;margin-bottom:4px">默认目标语言</div>
+              <select style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px">
+                <option>中文（简体）</option>
+              </select>
+            </div>
+            <button style="padding:8px 24px;background:#4A90D9;color:#fff;border:none;border-radius:4px">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

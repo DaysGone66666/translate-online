@@ -1,0 +1,100 @@
+<h2>侧边栏布局，你倾向哪种？</h2>
+<p class="subtitle">点击浮窗右上角的 ☰ 图标后，从右侧滑出的翻译面板</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>对话式</h3>
+      <p>从上到下按时间列出翻译记录，像聊天记录一样。每条显示原文+译文，最新在最上方。</p>
+      <div class="mockup" style="margin-top:8px;font-size:13px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;width:280px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between">
+            <span style="font-weight:600">Translate</span>
+            <span style="color:#999">⚙ ✕</span>
+          </div>
+          <div style="padding:10px 12px">
+            <div style="margin-bottom:10px">
+              <div style="font-size:11px;color:#999">EN</div>
+              <div style="background:#f0f4ff;padding:6px 10px;border-radius:6px;margin:2px 0">Good morning!</div>
+              <div style="font-size:11px;color:#999;margin-top:2px">中文</div>
+              <div style="background:#f5f5f5;padding:6px 10px;border-radius:6px;margin:2px 0">早上好！</div>
+            </div>
+            <div style="margin-bottom:10px">
+              <div style="font-size:11px;color:#999">EN</div>
+              <div style="background:#f0f4ff;padding:6px 10px;border-radius:6px;margin:2px 0">How are you?</div>
+              <div style="font-size:11px;color:#999;margin-top:2px">中文</div>
+              <div style="background:#f5f5f5;padding:6px 10px;border-radius:6px;margin:2px 0">你怎么样？</div>
+            </div>
+          </div>
+          <div style="padding:8px 12px;border-top:1px solid #eee">
+            <div style="border:1px solid #ddd;border-radius:6px;padding:6px 10px;color:#999;font-size:13px">输入文本翻译...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>列表式</h3>
+      <p>紧凑列表，一行原文一行译文。左侧有语言标签，右侧有操作按钮。更像传统翻译工具。</p>
+      <div class="mockup" style="margin-top:8px;font-size:13px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;width:280px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between">
+            <span style="font-weight:600">Translate</span>
+            <span style="color:#999">⚙ ✕</span>
+          </div>
+          <div style="padding:6px 12px">
+            <div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0">
+              <span style="font-size:11px;background:#4A90D9;color:#fff;padding:2px 6px;border-radius:3px;margin-right:8px;min-width:28px">EN</span>
+              <span style="flex:1">Good morning!</span>
+              <span style="color:#999">📋</span>
+            </div>
+            <div style="display:flex;align-items:center;padding:6px 0 6px 36px;border-bottom:1px solid #f0f0f0">
+              <span style="flex:1;color:#555">早上好！</span>
+              <span style="color:#999">📋 🔊</span>
+            </div>
+            <div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0">
+              <span style="font-size:11px;background:#4A90D9;color:#fff;padding:2px 6px;border-radius:3px;margin-right:8px;min-width:28px">EN</span>
+              <span style="flex:1">How are you?</span>
+              <span style="color:#999">📋</span>
+            </div>
+            <div style="display:flex;align-items:center;padding:6px 0 6px 36px">
+              <span style="flex:1;color:#555">你怎么样？</span>
+              <span style="color:#999">📋 🔊</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>双栏式</h3>
+      <p>左侧原文列表，右侧当前选中项的翻译详情。类似 CAT 工具布局，信息量大。</p>
+      <div class="mockup" style="margin-top:8px;font-size:13px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;width:300px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between">
+            <span style="font-weight:600">Translate</span>
+            <span style="color:#999">⚙ ✕</span>
+          </div>
+          <div style="display:flex;min-height:200px">
+            <div style="width:40%;border-right:1px solid #eee;padding:6px">
+              <div style="padding:6px 8px;background:#f0f4ff;border-radius:4px;font-size:12px;margin-bottom:4px">Good morning!</div>
+              <div style="padding:6px 8px;border-radius:4px;font-size:12px;margin-bottom:4px">How are you?</div>
+              <div style="padding:6px 8px;border-radius:4px;font-size:12px">Nice to meet you</div>
+            </div>
+            <div style="flex:1;padding:10px">
+              <div style="font-size:11px;color:#999;margin-bottom:4px">原文</div>
+              <div style="font-weight:500;margin-bottom:8px">Good morning!</div>
+              <div style="font-size:11px;color:#999;margin-bottom:4px">译文</div>
+              <div style="color:#555;margin-bottom:8px">早上好！</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,59 @@
+<h2>翻译浮窗布局，你倾向哪种？</h2>
+<p class="subtitle">划词后出现在选中文本附近的翻译结果卡片</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>简洁卡片</h3>
+      <p>纯翻译结果，只有原文+译文，右上角小图标可打开侧边栏。干净利落。</p>
+      <div class="mockup" style="margin-top:8px;font-size:14px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px;min-width:200px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="font-size:12px;color:#666;margin-bottom:4px">selected text</div>
+          <div style="font-weight:500;margin-bottom:8px">Hello, how are you?</div>
+          <div style="font-size:12px;color:#666;margin-bottom:4px">translation</div>
+          <div style="color:#333">你好，你怎么样？</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px">
+            <span style="font-size:12px;color:#999">⚙</span>
+            <span style="font-size:12px;color:#999">☰</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>详细面板</h3>
+      <p>包含更多操作：发音、复制、展开更多。浮窗右下角有切换至侧边栏的按钮。</p>
+      <div class="mockup" style="margin-top:8px;font-size:14px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px;min-width:260px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;color:#999">EN → 中文</span>
+            <span style="font-size:12px;color:#999">🔊 📋</span>
+          </div>
+          <div style="font-weight:500;font-size:15px;margin-bottom:4px">Hello, how are you?</div>
+          <div style="color:#555;margin-bottom:6px">你好，你怎么样？</div>
+          <div style="font-size:12px;color:#888;margin-bottom:6px;padding:4px 8px;background:#f5f5f5;border-radius:4px">你好吗？(alternate)</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;display:flex;justify-content:space-between">
+            <span style="font-size:12px;color:#4A90D9;cursor:pointer">打开侧边栏 →</span>
+            <span style="font-size:12px;color:#999">⚙</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>极简迷你</h3>
+      <p>仅显示一行翻译结果，鼠标悬停或点击后展开详细信息。不遮挡页面。</p>
+      <div class="mockup" style="margin-top:8px;font-size:14px">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:6px 12px;min-width:180px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:space-between">
+          <span>你好，你怎么样？</span>
+          <span style="font-size:12px;color:#999">›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
