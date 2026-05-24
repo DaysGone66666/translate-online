@@ -18,11 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   loadShortcut();
 
-  // 引擎切换显示/隐藏 DeepSeek 配置
+  // 引擎切换显示/隐藏 DeepSeek 配置 + 选中态样式
   document.querySelectorAll('input[name="engine"]').forEach(radio => {
     radio.addEventListener('change', () => {
       document.getElementById('deepseek-config').style.display =
         radio.value === 'deepseek' ? 'block' : 'none';
+      updateEngineActive();
     });
   });
 
@@ -37,7 +38,37 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-reset-shortcut').addEventListener('click', resetShortcut);
   document.getElementById('btn-save-shortcut').addEventListener('click', saveShortcut);
   document.getElementById('btn-cancel-shortcut').addEventListener('click', stopRecording);
+
+  // 芯片样式同步
+  document.querySelectorAll('.chip input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const chip = cb.closest('.chip');
+      if (chip) {
+        chip.classList.toggle('chip-active', cb.checked);
+        chip.classList.toggle('chip-inactive', !cb.checked);
+      }
+    });
+  });
 });
+
+// ==================== 引擎选中态 ====================
+
+function updateEngineActive() {
+  document.querySelectorAll('.radio-label').forEach(label => {
+    const radio = label.querySelector('input[type="radio"]');
+    label.classList.toggle('active', radio && radio.checked);
+  });
+}
+
+function updateChipStates() {
+  document.querySelectorAll('.chip input[type="checkbox"]').forEach(cb => {
+    const chip = cb.closest('.chip');
+    if (chip) {
+      chip.classList.toggle('chip-active', cb.checked);
+      chip.classList.toggle('chip-inactive', !cb.checked);
+    }
+  });
+}
 
 // ==================== 快捷键管理 ====================
 
@@ -174,6 +205,10 @@ function loadSettings() {
       items[STORAGE_KEYS.AUTO_TRANSLATE] !== false;
     document.getElementById('trigger-contextmenu').checked =
       items[STORAGE_KEYS.CONTEXT_MENU] !== false;
+
+    // 引擎选中态 + 芯片样式同步
+    updateEngineActive();
+    updateChipStates();
   });
 }
 
