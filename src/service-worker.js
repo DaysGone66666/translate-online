@@ -193,18 +193,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'open-options':
       chrome.runtime.openOptionsPage();
       return false;
-
-    case 'get-settings':
-      (async () => {
-        const storage = await chrome.storage.sync.get([
-          STORAGE_KEYS.AUTO_TRANSLATE,
-          STORAGE_KEYS.CONTEXT_MENU
-        ]);
-        sendResponse(storage);
-      })().catch(err => {
-        sendResponse({});
-      });
-      return true;
   }
 });
 

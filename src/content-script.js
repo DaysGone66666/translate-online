@@ -55,8 +55,8 @@ function positionPopup(rect) {
     top = rect.top + window.scrollY - popupHeight - 6;
   }
 
-  popup.style.left = `${left}px`;
-  popup.style.top = `${top}px`;
+  popupContainer.style.left = `${left}px`;
+  popupContainer.style.top = `${top}px`;
 }
 
 function createPopup(text, rect) {
@@ -106,6 +106,12 @@ function createPopup(text, rect) {
     if (!translationEl) return;
     if (response && response.success) {
       translationEl.textContent = response.text;
+      if (response._note) {
+        const note = document.createElement('div');
+        note.className = 'to-popup-note';
+        note.textContent = response._note;
+        translationEl.appendChild(note);
+      }
       // 保存到历史
       chrome.runtime.sendMessage({ type: 'save-to-history', text, translation: response.text });
     } else if (response) {
@@ -143,7 +149,6 @@ document.addEventListener('mouseup', (event) => {
   }
 
   // 检测是否为有效文本（非空、非纯空白）
-  if (/^\s*$/.test(text)) return;
 
   // 0.3s 防误触
   clearTimeout(debounceTimer);
@@ -182,8 +187,5 @@ chrome.runtime.onMessage.addListener((request) => {
       const rect = range.getBoundingClientRect();
       createPopup(text, rect);
     }
-  }
-  if (request.type === 'close-popup') {
-    closePopup();
   }
 });

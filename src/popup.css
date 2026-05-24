@@ -82,3 +82,9 @@
 .to-popup-btn:hover {
   background: #f5f5f5;
 }
+
+.to-popup-note {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
