@@ -1,5 +1,17 @@
 let popupContainer = null;
 let debounceTimer = null;
+let autoTranslateEnabled = true;
+
+// ====== 加载设置 ======
+chrome.storage.sync.get(['trigger_auto_translate'], (items) => {
+  autoTranslateEnabled = items.trigger_auto_translate !== false;
+});
+// 监听设置变更
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.trigger_auto_translate) {
+    autoTranslateEnabled = changes.trigger_auto_translate.newValue !== false;
+  }
+});
 
 // ====== Helper ======
 
@@ -115,6 +127,8 @@ function createPopup(text, rect) {
 
 // 划词检测 —— mouseup
 document.addEventListener('mouseup', (event) => {
+  if (!autoTranslateEnabled) return;
+
   // 点击浮窗内按钮时不关闭浮窗（按钮点击会清除文本选区）
   if (popupContainer && popupContainer.contains(event.target)) {
     return;

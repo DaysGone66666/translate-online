@@ -8,7 +8,8 @@ const STORAGE_KEYS = {
   MODEL: 'deepseek_model',
   HISTORY: 'translation_history',
   API_URL: 'deepseek_api_url',
-  CONTEXT_MENU: 'context_menu_enabled'
+  CONTEXT_MENU: 'trigger_context_menu',
+  AUTO_TRANSLATE: 'trigger_auto_translate'
 };
 
 // ==================== 安装事件处理 ====================
@@ -192,6 +193,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'open-options':
       chrome.runtime.openOptionsPage();
       return false;
+
+    case 'get-settings':
+      (async () => {
+        const storage = await chrome.storage.sync.get([
+          STORAGE_KEYS.AUTO_TRANSLATE,
+          STORAGE_KEYS.CONTEXT_MENU
+        ]);
+        sendResponse(storage);
+      })().catch(err => {
+        sendResponse({});
+      });
+      return true;
   }
 });
 
