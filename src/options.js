@@ -132,5 +132,9 @@ function showStatus(message, type) {
   const el = document.getElementById('status-message');
   el.textContent = message;
   el.className = `status-message ${type}`;
-  setTimeout(() => { el.style.display = 'none'; }, 5000);
+  el.style.display = ''; // 清除内联样式，让 CSS class 生效
+  if (el._hideTimer) clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => {
+    el.className = 'status-message';
+  }, 5000);
 }
