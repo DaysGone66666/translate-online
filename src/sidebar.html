@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <div id="app">
+    <div class="sb-header">
+      <h1 class="sb-title">Translate</h1>
+      <div class="sb-header-actions">
+        <button id="sb-btn-settings" class="sb-icon-btn" title="设置">⚙</button>
+        <button id="sb-btn-clear" class="sb-icon-btn" title="清除历史">🗑</button>
+      </div>
+    </div>
+    <div id="sb-history" class="sb-history"></div>
+    <div class="sb-input-area">
+      <textarea id="sb-input" class="sb-input" placeholder="输入文本翻译..." rows="2"></textarea>
+      <button id="sb-btn-translate" class="sb-btn-primary">翻译</button>
+    </div>
+  </div>
+  <script src="sidebar.js"></script>
+</body>
+</html>
