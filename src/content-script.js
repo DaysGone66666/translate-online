@@ -12,6 +12,7 @@ function escapeHtml(str) {
 // ====== Popup lifecycle ======
 
 function closePopup() {
+  clearTimeout(debounceTimer);
   if (popupContainer) {
     popupContainer.remove();
     popupContainer = null;
@@ -75,26 +76,30 @@ function createPopup(text, rect) {
   positionPopup(rect);
 
   // 绑定按钮事件
-  document.getElementById('to-btn-speak').addEventListener('click', () => {
+  popupContainer.querySelector('#to-btn-speak').addEventListener('click', () => {
     const utterance = new SpeechSynthesisUtterance(text);
     speechSynthesis.speak(utterance);
   });
 
-  document.getElementById('to-btn-sidebar').addEventListener('click', () => {
+  popupContainer.querySelector('#to-btn-sidebar').addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'open-sidebar' });
   });
 
   // 发送翻译请求
   chrome.runtime.sendMessage({ type: 'translate', text }, (response) => {
-    const translationEl = document.getElementById('to-translation-text');
-    if (response.success) {
+    if (chrome.runtime.lastError) {
+      return;
+    }
+    const translationEl = popupContainer.querySelector('#to-translation-text');
+    if (!translationEl) return;
+    if (response && response.success) {
       translationEl.textContent = response.text;
       // 保存到历史
       chrome.runtime.sendMessage({ type: 'save-to-history', text, translation: response.text });
-    } else {
+    } else if (response) {
       if (response.needsConfig) {
         translationEl.innerHTML = `<span class="to-popup-error">${escapeHtml(response.message)}</span> <a href="#" class="to-popup-link" id="to-goto-settings">去设置</a>`;
-        document.getElementById('to-goto-settings').addEventListener('click', (e) => {
+        popupContainer.querySelector('#to-goto-settings').addEventListener('click', (e) => {
           e.preventDefault();
           chrome.runtime.sendMessage({ type: 'open-options' });
           closePopup();
@@ -110,6 +115,11 @@ function createPopup(text, rect) {
 
 // 划词检测 —— mouseup
 document.addEventListener('mouseup', (event) => {
+  // 点击浮窗内按钮时不关闭浮窗（按钮点击会清除文本选区）
+  if (popupContainer && popupContainer.contains(event.target)) {
+    return;
+  }
+
   const selection = window.getSelection();
   const text = selection.toString().trim();
 
