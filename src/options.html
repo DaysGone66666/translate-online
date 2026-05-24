@@ -64,11 +64,31 @@
           <input type="checkbox" id="trigger-select" checked style="display:none">
           <span>✓ 划词自动翻译</span>
         </label>
-        <span class="chip chip-inactive">Alt+T 快捷键</span>
+        <span class="chip chip-inactive">快捷键</span>
         <label class="chip chip-inactive">
           <input type="checkbox" id="trigger-contextmenu" checked style="display:none">
           <span>右键菜单</span>
         </label>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">快捷键</h2>
+      <div class="form-group">
+        <label class="form-label">翻译选中文本</label>
+        <div class="shortcut-row">
+          <div class="shortcut-display" id="shortcut-display">Ctrl+Shift+E</div>
+          <button id="btn-record-shortcut" class="btn btn-small btn-secondary">录制</button>
+          <button id="btn-reset-shortcut" class="btn btn-small btn-secondary">重置</button>
+        </div>
+        <div id="shortcut-recorder" class="shortcut-recorder" style="display:none">
+          <p class="shortcut-hint">请按下新的快捷键组合...</p>
+          <div id="shortcut-keys" class="shortcut-recorder-keys"></div>
+          <div class="shortcut-recorder-actions">
+            <button id="btn-save-shortcut" class="btn btn-primary btn-small">保存</button>
+            <button id="btn-cancel-shortcut" class="btn btn-secondary btn-small">取消</button>
+          </div>
+        </div>
       </div>
     </section>
 

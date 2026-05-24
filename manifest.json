@@ -20,7 +20,7 @@
   "options_page": "src/options.html",
   "commands": {
     "translate-selection": {
-      "suggested_key": { "default": "Alt+T" },
+      "suggested_key": { "default": "Ctrl+Shift+E" },
       "description": "翻译选中文本"
     }
   },

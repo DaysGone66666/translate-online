@@ -207,3 +207,81 @@ body::before {
 .status-message.success { display: block; background: rgba(22,163,74,0.1); color: #16A34A; }
 .status-message.error { display: block; background: rgba(220,38,38,0.1); color: #DC2626; }
 .status-message.info { display: block; background: rgba(37,99,235,0.08); color: #2563EB; }
+
+/* Shortcut customizer */
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcut-display {
+  flex: 1;
+  padding: 9px 14px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: monospace;
+  font-weight: 600;
+  color: #374151;
+  cursor: default;
+}
+
+.btn-small {
+  padding: 8px 14px;
+  font-size: 12px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.shortcut-recorder {
+  margin-top: 10px;
+  padding: 14px;
+  background: rgba(37,99,235,0.04);
+  border: 1px dashed rgba(37,99,235,0.3);
+  border-radius: 10px;
+}
+
+.shortcut-hint {
+  font-size: 13px;
+  color: #6B7280;
+  margin-bottom: 10px;
+}
+
+.shortcut-recorder-keys {
+  padding: 12px 16px;
+  background: #fff;
+  border: 2px solid #2563EB;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  text-align: center;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shortcut-recorder-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.shortcut-recorder-actions .btn-primary {
+  flex: none;
+}
+
+.shortcut-recorder-actions .btn-secondary {
+  flex: none;
+}
+
+.shortcut-error {
+  color: #DC2626;
+  font-size: 12px;
+  margin-top: 6px;
+}
