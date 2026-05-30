@@ -232,14 +232,15 @@ chrome.runtime.onMessage.addListener((request) => {
 
 /* 译文段落（后续任务使用，现在先定义） */
 .to-tr {
-  background: rgba(102,126,234,0.1);
+  background: rgba(255,255,255,0.92);
   padding: 8px 12px;
   border-radius: 6px;
   margin: 6px 0 6px 0;
   font-size: inherit;
   line-height: 1.7;
-  color: #1a1a2e;
+  color: #111;
   border-left: 3px solid #667eea;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .to-tr-hidden { display: none; }
 `;
@@ -544,13 +545,18 @@ function setupViewportObservers(textNodes) {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        const textNode = entry.target._toTextNode;
-        if (textNode && textNode.parentElement && !textNode.parentElement.hasAttribute(TRANSLATED_ATTR)) {
-          pushToQueue(textNode);
+        const textNodes = entry.target._toTextNodes;
+        if (textNodes && textNodes.length) {
+          textNodes.forEach(textNode => {
+            if (textNode && textNode.parentElement && !textNode.parentElement.hasAttribute(TRANSLATED_ATTR)) {
+              pushToQueue(textNode);
+            }
+          });
           sortQueueByViewport();
           processQueue();
         }
         observer.unobserve(entry.target);
+        delete entry.target._toTextNodes;
       }
     });
   }, { rootMargin: '100px' });
@@ -563,8 +569,11 @@ function setupViewportObservers(textNodes) {
         pushToQueue(textNode);
       } else {
         // 未在视口内 → 用 observer 守候
-        parent._toTextNode = textNode;
-        observer.observe(parent);
+        if (!parent._toTextNodes) {
+          parent._toTextNodes = [];
+          observer.observe(parent);
+        }
+        parent._toTextNodes.push(textNode);
       }
     }
   }
