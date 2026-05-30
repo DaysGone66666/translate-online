@@ -292,3 +292,63 @@ if (document.readyState !== 'loading') {
 } else {
   window.addEventListener('DOMContentLoaded', createBall);
 }
+
+// --- 文本节点收集 ---
+const TRANSLATED_ATTR = 'data-to-translated';
+const ORIGINAL_ATTR = 'data-to-original';
+
+function collectTextNodes() {
+  const nodes = [];
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (textNode) => {
+        // 跳过已翻译节点
+        const parent = textNode.parentElement;
+        if (!parent || parent.hasAttribute(TRANSLATED_ATTR)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // 跳过不可见元素
+        const style = window.getComputedStyle(parent);
+        if (style.display === 'none' || style.visibility === 'hidden') {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // 跳过 script/style/noscript
+        const tag = parent.tagName;
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // 跳过代码块
+        if (tag === 'CODE' || tag === 'PRE' || tag === 'KBD') {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // 跳过 translate="no" 祖先
+        let el = parent;
+        while (el) {
+          if (el.getAttribute && el.getAttribute('translate') === 'no') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          el = el.parentElement;
+        }
+
+        // 跳过太短的文本（≤3字符）
+        const text = textNode.textContent.trim();
+        if (text.length <= 3) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    }
+  );
+
+  while (walker.nextNode()) {
+    nodes.push(walker.currentNode);
+  }
+  return nodes;
+}
