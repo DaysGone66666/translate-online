@@ -196,3 +196,93 @@ chrome.runtime.onMessage.addListener((request) => {
     }
   }
 });
+
+// ==================== 页面一键翻译 ====================
+
+// --- CSS 注入 ---
+(function injectPageTranslateStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+/* 浮动小球 */
+.to-ball {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 60px;
+  border-radius: 18px 0 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2147483646;
+  transition: background 0.3s, opacity 0.2s;
+  user-select: none;
+  writing-mode: vertical-lr;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(102,126,234,0.35);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.to-ball--idle { background: linear-gradient(180deg, #667eea, #764ba2); }
+.to-ball--loading { background: linear-gradient(180deg, #f39c12, #e67e22); }
+.to-ball--done { background: linear-gradient(180deg, #27ae60, #2ecc71); }
+
+/* 译文段落（后续任务使用，现在先定义） */
+.to-tr {
+  background: rgba(102,126,234,0.07);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin: 4px 0 4px 0;
+  font-size: inherit;
+  line-height: inherit;
+  color: #4a4a4a;
+  border-left: 3px solid #667eea;
+}
+.to-tr-hidden { display: none; }
+`;
+  document.head.appendChild(style);
+})();
+
+// --- 小球状态 ---
+const BALL_STATES = { IDLE: 'idle', LOADING: 'loading', DONE: 'done' };
+let ballState = BALL_STATES.IDLE;
+let ballEl = null;
+
+function createBall() {
+  if (ballEl) return;
+  ballEl = document.createElement('div');
+  ballEl.className = 'to-ball to-ball--idle';
+  ballEl.textContent = '译';
+  ballEl.addEventListener('click', onBallClick);
+  document.body.appendChild(ballEl);
+}
+
+function setBallState(state) {
+  ballState = state;
+  if (!ballEl) return;
+  ballEl.className = 'to-ball';
+  switch (state) {
+    case BALL_STATES.IDLE:
+      ballEl.classList.add('to-ball--idle');
+      ballEl.textContent = '译';
+      break;
+    case BALL_STATES.LOADING:
+      ballEl.classList.add('to-ball--loading');
+      ballEl.textContent = '⟳';
+      break;
+    case BALL_STATES.DONE:
+      ballEl.classList.add('to-ball--done');
+      ballEl.textContent = '原文';
+      break;
+  }
+}
+
+// 页面加载后创建小球
+if (document.readyState === 'complete') {
+  createBall();
+} else {
+  window.addEventListener('DOMContentLoaded', createBall);
+}
