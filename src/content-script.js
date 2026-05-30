@@ -319,6 +319,7 @@ const ORIGINAL_ATTR = 'data-to-original';
 
 // 占位函数，任务 6 中实现完整重置逻辑
 function resetPageTranslation() {
+  translateGeneration++;
   // 移除所有译文 DOM
   document.querySelectorAll('.to-tr').forEach(el => el.remove());
   // 清除原文标记
