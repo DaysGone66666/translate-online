@@ -352,3 +352,119 @@ function collectTextNodes() {
   }
   return nodes;
 }
+
+// --- 翻译队列 ---
+let translateQueue = [];
+let isTranslating = false;
+let observers = [];
+let toggleShowTranslations = true; // 当前是否显示译文
+
+function pushToQueue(textNode) {
+  // 去重
+  if (translateQueue.some(item => item.textNode === textNode)) return;
+  translateQueue.push({ textNode, text: textNode.textContent.trim() });
+}
+
+function sortQueueByViewport() {
+  translateQueue.sort((a, b) => {
+    const aInView = isInViewport(a.textNode.parentElement);
+    const bInView = isInViewport(b.textNode.parentElement);
+    if (aInView && !bInView) return -1;
+    if (!aInView && bInView) return 1;
+    return 0;
+  });
+}
+
+function isInViewport(el) {
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.top < window.innerHeight && rect.bottom > 0;
+}
+
+async function processQueue() {
+  if (isTranslating) return;
+  if (translateQueue.length === 0) {
+    // 队列空了 = 全部翻译完成
+    setBallState(BALL_STATES.DONE);
+    return;
+  }
+
+  isTranslating = true;
+  sortQueueByViewport();
+
+  const { textNode, text } = translateQueue.shift();
+  const parent = textNode.parentElement;
+
+  // 再次检查该节点是否已被翻译（避免竞态）
+  if (parent && parent.hasAttribute(TRANSLATED_ATTR)) {
+    isTranslating = false;
+    processQueue();
+    return;
+  }
+
+  try {
+    const response = await translateText(text);
+    if (response && response.success) {
+      injectTranslation(textNode, response.text);
+      if (parent) {
+        parent.setAttribute(TRANSLATED_ATTR, '');
+      }
+    } else if (response && response.error === 'rate_limited') {
+      // 429：放回队列头部，暂停 5 秒
+      translateQueue.unshift({ textNode, text });
+      isTranslating = false;
+      await sleep(5000);
+      processQueue();
+      return;
+    } else if (response && response.error === 'unauthorized') {
+      // 401：停止所有翻译
+      alert('Translate Online: API Key 无效，请检查设置');
+      if (typeof resetPageTranslation === 'function') resetPageTranslation();
+      return;
+    }
+    // 其他错误：跳过此节点，继续
+  } catch (err) {
+    // 网络错误：跳过，继续下一个
+  }
+
+  isTranslating = false;
+  processQueue();
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function translateText(text) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'translate', text }, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({ success: false, error: 'runtime_error', message: chrome.runtime.lastError.message });
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+// --- 双语 DOM 注入 ---
+let idCounter = 0;
+
+function injectTranslation(textNode, translation) {
+  const parent = textNode.parentElement;
+  if (!parent) return;
+
+  const id = 't' + (++idCounter);
+
+  // 给原文段落打标记
+  parent.setAttribute(ORIGINAL_ATTR, id);
+
+  // 创建译文段落
+  const trEl = document.createElement('p');
+  trEl.className = 'to-tr';
+  trEl.setAttribute('data-to-src', id);
+  trEl.textContent = translation;
+
+  // 插入到原文段落后面
+  parent.insertAdjacentElement('afterend', trEl);
+}
