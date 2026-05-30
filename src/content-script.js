@@ -488,7 +488,10 @@ async function processOne(gen) {
     }
     // 其他错误：跳过此节点，继续
   } catch (err) {
-    console.warn('[Translate Online] 翻译节点时出错:', err);
+    // 扩展重载后 context invalidated 是正常现象，静默跳过
+    if (!err.message || !err.message.includes('context invalidated')) {
+      console.warn('[Translate Online] 翻译节点时出错:', err);
+    }
   }
 
   // 继续处理下一个
