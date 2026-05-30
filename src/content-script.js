@@ -475,3 +475,43 @@ function injectTranslation(textNode, translation) {
   // 插入到原文段落后面
   parent.insertAdjacentElement('afterend', trEl);
 }
+
+// --- 视口观察 ---
+function setupViewportObservers(textNodes) {
+  // 清理旧 observer
+  observers.forEach(obs => obs.disconnect());
+  observers = [];
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const textNode = entry.target._toTextNode;
+        if (textNode && !textNode.parentElement.hasAttribute(TRANSLATED_ATTR)) {
+          pushToQueue(textNode);
+          sortQueueByViewport();
+          processQueue();
+        }
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { rootMargin: '100px' });
+
+  for (const textNode of textNodes) {
+    const parent = textNode.parentElement;
+    if (parent && !parent.hasAttribute(TRANSLATED_ATTR)) {
+      // 判断是否已在视口内
+      if (isInViewport(parent)) {
+        pushToQueue(textNode);
+      } else {
+        // 未在视口内 → 用 observer 守候
+        parent._toTextNode = textNode;
+        observer.observe(parent);
+      }
+    }
+  }
+  observers.push(observer);
+
+  // 视口内的排最前面，视口外的靠后
+  sortQueueByViewport();
+  processQueue();
+}
