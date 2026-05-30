@@ -252,7 +252,27 @@ let ballState = BALL_STATES.IDLE;
 let ballEl = null;
 
 // 占位函数，任务 5 中实现完整点击逻辑
-function onBallClick() {}
+// --- 小球点击处理 ---
+let lastBallClick = 0;
+
+function onBallClick() {
+  // 500ms 防抖
+  const now = Date.now();
+  if (now - lastBallClick < 500) return;
+  lastBallClick = now;
+
+  switch (ballState) {
+    case BALL_STATES.IDLE:
+      startPageTranslation();
+      break;
+    case BALL_STATES.DONE:
+      toggleAllTranslations();
+      break;
+    case BALL_STATES.LOADING:
+      // 翻译中，点击无操作
+      break;
+  }
+}
 
 function createBall() {
   if (ballEl) return;
@@ -514,4 +534,32 @@ function setupViewportObservers(textNodes) {
   // 视口内的排最前面，视口外的靠后
   sortQueueByViewport();
   processQueue();
+}
+
+// --- 启动翻译 & 切换 ---
+function startPageTranslation() {
+  const textNodes = collectTextNodes();
+  if (textNodes.length === 0) return;
+
+  setBallState(BALL_STATES.LOADING);
+  toggleShowTranslations = true;
+  translateQueue = [];
+  isTranslating = false;
+  idCounter = 0;
+  observers.forEach(obs => obs.disconnect());
+  observers = [];
+
+  setupViewportObservers(textNodes);
+}
+
+function toggleAllTranslations() {
+  toggleShowTranslations = !toggleShowTranslations;
+  const trNodes = document.querySelectorAll('.to-tr');
+  trNodes.forEach(el => {
+    if (toggleShowTranslations) {
+      el.classList.remove('to-tr-hidden');
+    } else {
+      el.classList.add('to-tr-hidden');
+    }
+  });
 }
