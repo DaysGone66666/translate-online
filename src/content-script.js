@@ -251,11 +251,17 @@ const BALL_STATES = { IDLE: 'idle', LOADING: 'loading', DONE: 'done' };
 let ballState = BALL_STATES.IDLE;
 let ballEl = null;
 
+// 占位函数，任务 5 中实现完整点击逻辑
+function onBallClick() {}
+
 function createBall() {
   if (ballEl) return;
   ballEl = document.createElement('div');
   ballEl.className = 'to-ball to-ball--idle';
   ballEl.textContent = '译';
+  ballEl.setAttribute('role', 'button');
+  ballEl.setAttribute('tabindex', '0');
+  ballEl.setAttribute('aria-label', '翻译页面');
   ballEl.addEventListener('click', onBallClick);
   document.body.appendChild(ballEl);
 }
@@ -281,7 +287,7 @@ function setBallState(state) {
 }
 
 // 页面加载后创建小球
-if (document.readyState === 'complete') {
+if (document.readyState !== 'loading') {
   createBall();
 } else {
   window.addEventListener('DOMContentLoaded', createBall);
