@@ -268,7 +268,8 @@ function onBallClick() {
       toggleAllTranslations();
       break;
     case BALL_STATES.LOADING:
-      // 翻译中，点击无操作
+      // 翻译中，点击取消翻译
+      cancelTranslation();
       break;
   }
 }
@@ -575,6 +576,21 @@ function setupViewportObservers(textNodes) {
 }
 
 // --- 启动翻译 & 切换 ---
+function cancelTranslation() {
+  translateGeneration++;
+  activeTranslations = 0;
+  translateQueue = [];
+  idCounter = 0;
+  observers.forEach(obs => obs.disconnect());
+  observers = [];
+  // 移除已产生的译文
+  document.querySelectorAll('.to-tr').forEach(el => el.remove());
+  document.querySelectorAll(`[${ORIGINAL_ATTR}]`).forEach(el => el.removeAttribute(ORIGINAL_ATTR));
+  document.querySelectorAll(`[${TRANSLATED_ATTR}]`).forEach(el => el.removeAttribute(TRANSLATED_ATTR));
+  setBallState(BALL_STATES.IDLE);
+  toggleShowTranslations = true;
+}
+
 function startPageTranslation() {
   const textNodes = collectTextNodes();
   if (textNodes.length === 0) return;
