@@ -297,6 +297,9 @@ if (document.readyState !== 'loading') {
 const TRANSLATED_ATTR = 'data-to-translated';
 const ORIGINAL_ATTR = 'data-to-original';
 
+// 占位函数，任务 6 中实现完整重置逻辑
+function resetPageTranslation() {}
+
 function collectTextNodes() {
   const nodes = [];
   const walker = document.createTreeWalker(
@@ -398,6 +401,7 @@ async function processQueue() {
   // 再次检查该节点是否已被翻译（避免竞态）
   if (parent && parent.hasAttribute(TRANSLATED_ATTR)) {
     isTranslating = false;
+    await null;
     processQueue();
     return;
   }
@@ -419,12 +423,12 @@ async function processQueue() {
     } else if (response && response.error === 'unauthorized') {
       // 401：停止所有翻译
       alert('Translate Online: API Key 无效，请检查设置');
-      if (typeof resetPageTranslation === 'function') resetPageTranslation();
+      resetPageTranslation();
       return;
     }
     // 其他错误：跳过此节点，继续
   } catch (err) {
-    // 网络错误：跳过，继续下一个
+    console.warn('[Translate Online] 翻译节点时出错:', err);
   }
 
   isTranslating = false;
@@ -454,13 +458,16 @@ function injectTranslation(textNode, translation) {
   const parent = textNode.parentElement;
   if (!parent) return;
 
+  const tag = parent.tagName;
+  if (tag === 'LI' || tag === 'TD' || tag === 'TH' || tag === 'DT' || tag === 'BUTTON') return;
+
   const id = 't' + (++idCounter);
 
   // 给原文段落打标记
   parent.setAttribute(ORIGINAL_ATTR, id);
 
   // 创建译文段落
-  const trEl = document.createElement('p');
+  const trEl = document.createElement('div');
   trEl.className = 'to-tr';
   trEl.setAttribute('data-to-src', id);
   trEl.textContent = translation;
