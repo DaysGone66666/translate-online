@@ -232,13 +232,13 @@ chrome.runtime.onMessage.addListener((request) => {
 
 /* 译文段落（后续任务使用，现在先定义） */
 .to-tr {
-  background: rgba(102,126,234,0.07);
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin: 4px 0 4px 0;
+  background: rgba(102,126,234,0.1);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 6px 0 6px 0;
   font-size: inherit;
-  line-height: inherit;
-  color: #4a4a4a;
+  line-height: 1.7;
+  color: #1a1a2e;
   border-left: 3px solid #667eea;
 }
 .to-tr-hidden { display: none; }
@@ -329,7 +329,7 @@ function resetPageTranslation() {
   });
   // 重置队列
   translateQueue = [];
-  isTranslating = false;
+  activeTranslations = 0;
   idCounter = 0;
   observers.forEach(obs => obs.disconnect());
   observers = [];
@@ -396,7 +396,8 @@ function collectTextNodes() {
 
 // --- 翻译队列 ---
 let translateQueue = [];
-let isTranslating = false;
+let activeTranslations = 0;
+const MAX_CONCURRENT = 2;
 let observers = [];
 let translateGeneration = 0;
 let toggleShowTranslations = true; // 当前是否显示译文
@@ -424,30 +425,44 @@ function isInViewport(el) {
 }
 
 async function processQueue() {
-  if (isTranslating) return;
   const gen = translateGeneration;
-  if (translateQueue.length === 0) {
-    // 队列空了 = 全部翻译完成
-    setBallState(BALL_STATES.DONE);
-    return;
+
+  // 启动尽可能多的并发 worker
+  while (activeTranslations < MAX_CONCURRENT && translateQueue.length > 0) {
+    activeTranslations++;
+    processOne(gen);
   }
 
-  isTranslating = true;
+  // 全部完成且队列空 → DONE
+  if (activeTranslations === 0 && translateQueue.length === 0) {
+    setBallState(BALL_STATES.DONE);
+  }
+}
+
+async function processOne(gen) {
   sortQueueByViewport();
+
+  if (translateQueue.length === 0) {
+    activeTranslations--;
+    if (activeTranslations === 0 && translateQueue.length === 0) {
+      setBallState(BALL_STATES.DONE);
+    }
+    return;
+  }
 
   const { textNode, text } = translateQueue.shift();
   const parent = textNode.parentElement;
 
   // 再次检查该节点是否已被翻译（避免竞态）
   if (parent && parent.hasAttribute(TRANSLATED_ATTR)) {
-    isTranslating = false;
-    processQueue();
+    // 跳过，处理下一个
+    processOne(gen);
     return;
   }
 
   try {
     const response = await translateText(text);
-    if (gen !== translateGeneration) return;
+    if (gen !== translateGeneration) { activeTranslations--; return; }
     if (response && response.success) {
       injectTranslation(textNode, response.text);
       if (parent) {
@@ -456,14 +471,14 @@ async function processQueue() {
     } else if (response && response.error === 'rate_limited') {
       // 429：放回队列头部，暂停 5 秒
       translateQueue.unshift({ textNode, text });
-      isTranslating = false;
+      activeTranslations--;
       await sleep(5000);
       if (gen !== translateGeneration) return;
       processQueue();
       return;
     } else if (response && response.error === 'unauthorized') {
       // 401：停止所有翻译
-      isTranslating = false;
+      activeTranslations = 0;
       setBallState(BALL_STATES.IDLE);
       alert('Translate Online: API Key 无效，请检查设置');
       resetPageTranslation();
@@ -474,8 +489,8 @@ async function processQueue() {
     console.warn('[Translate Online] 翻译节点时出错:', err);
   }
 
-  isTranslating = false;
-  processQueue();
+  // 继续处理下一个
+  processOne(gen);
 }
 
 function sleep(ms) {
@@ -568,7 +583,7 @@ function startPageTranslation() {
   setBallState(BALL_STATES.LOADING);
   toggleShowTranslations = true;
   translateQueue = [];
-  isTranslating = false;
+  activeTranslations = 0;
   idCounter = 0;
   observers.forEach(obs => obs.disconnect());
   observers = [];
