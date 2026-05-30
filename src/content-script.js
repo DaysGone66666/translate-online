@@ -318,7 +318,26 @@ const TRANSLATED_ATTR = 'data-to-translated';
 const ORIGINAL_ATTR = 'data-to-original';
 
 // 占位函数，任务 6 中实现完整重置逻辑
-function resetPageTranslation() {}
+function resetPageTranslation() {
+  // 移除所有译文 DOM
+  document.querySelectorAll('.to-tr').forEach(el => el.remove());
+  // 清除原文标记
+  document.querySelectorAll(`[${ORIGINAL_ATTR}]`).forEach(el => {
+    el.removeAttribute(ORIGINAL_ATTR);
+  });
+  document.querySelectorAll(`[${TRANSLATED_ATTR}]`).forEach(el => {
+    el.removeAttribute(TRANSLATED_ATTR);
+  });
+  // 重置队列
+  translateQueue = [];
+  isTranslating = false;
+  idCounter = 0;
+  observers.forEach(obs => obs.disconnect());
+  observers = [];
+  // 重置小球
+  setBallState(BALL_STATES.IDLE);
+  toggleShowTranslations = true;
+}
 
 function collectTextNodes() {
   const nodes = [];
@@ -571,3 +590,33 @@ function toggleAllTranslations() {
     }
   });
 }
+
+// --- SPA 路由检测 ---
+let lastUrl = location.href;
+
+function setupSpaObserver() {
+  const origPushState = history.pushState;
+  const origReplaceState = history.replaceState;
+
+  history.pushState = function () {
+    origPushState.apply(this, arguments);
+    checkUrlChange();
+  };
+  history.replaceState = function () {
+    origReplaceState.apply(this, arguments);
+    checkUrlChange();
+  };
+
+  window.addEventListener('popstate', checkUrlChange);
+  window.addEventListener('hashchange', checkUrlChange);
+}
+
+function checkUrlChange() {
+  if (location.href !== lastUrl) {
+    lastUrl = location.href;
+    resetPageTranslation();
+  }
+}
+
+// 启动 SPA 监听
+setupSpaObserver();
