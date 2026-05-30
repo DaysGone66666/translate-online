@@ -256,7 +256,7 @@ let ballEl = null;
 let lastBallClick = 0;
 
 function onBallClick() {
-  // 500ms 防抖
+  // 500ms 节流
   const now = Date.now();
   if (now - lastBallClick < 500) return;
   lastBallClick = now;
@@ -380,6 +380,7 @@ function collectTextNodes() {
 let translateQueue = [];
 let isTranslating = false;
 let observers = [];
+let translateGeneration = 0;
 let toggleShowTranslations = true; // 当前是否显示译文
 
 function pushToQueue(textNode) {
@@ -406,6 +407,7 @@ function isInViewport(el) {
 
 async function processQueue() {
   if (isTranslating) return;
+  const gen = translateGeneration;
   if (translateQueue.length === 0) {
     // 队列空了 = 全部翻译完成
     setBallState(BALL_STATES.DONE);
@@ -422,12 +424,14 @@ async function processQueue() {
   if (parent && parent.hasAttribute(TRANSLATED_ATTR)) {
     isTranslating = false;
     await null;
+    if (gen !== translateGeneration) return;
     processQueue();
     return;
   }
 
   try {
     const response = await translateText(text);
+    if (gen !== translateGeneration) return;
     if (response && response.success) {
       injectTranslation(textNode, response.text);
       if (parent) {
@@ -438,10 +442,13 @@ async function processQueue() {
       translateQueue.unshift({ textNode, text });
       isTranslating = false;
       await sleep(5000);
+      if (gen !== translateGeneration) return;
       processQueue();
       return;
     } else if (response && response.error === 'unauthorized') {
       // 401：停止所有翻译
+      isTranslating = false;
+      setBallState(BALL_STATES.IDLE);
       alert('Translate Online: API Key 无效，请检查设置');
       resetPageTranslation();
       return;
@@ -506,7 +513,7 @@ function setupViewportObservers(textNodes) {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const textNode = entry.target._toTextNode;
-        if (textNode && !textNode.parentElement.hasAttribute(TRANSLATED_ATTR)) {
+        if (textNode && textNode.parentElement && !textNode.parentElement.hasAttribute(TRANSLATED_ATTR)) {
           pushToQueue(textNode);
           sortQueueByViewport();
           processQueue();
@@ -541,6 +548,7 @@ function startPageTranslation() {
   const textNodes = collectTextNodes();
   if (textNodes.length === 0) return;
 
+  translateGeneration++;
   setBallState(BALL_STATES.LOADING);
   toggleShowTranslations = true;
   translateQueue = [];
