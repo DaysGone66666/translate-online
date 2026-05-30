@@ -251,7 +251,6 @@ const BALL_STATES = { IDLE: 'idle', LOADING: 'loading', DONE: 'done' };
 let ballState = BALL_STATES.IDLE;
 let ballEl = null;
 
-// 占位函数，任务 5 中实现完整点击逻辑
 // --- 小球点击处理 ---
 let lastBallClick = 0;
 
@@ -317,7 +316,6 @@ if (document.readyState !== 'loading') {
 const TRANSLATED_ATTR = 'data-to-translated';
 const ORIGINAL_ATTR = 'data-to-original';
 
-// 占位函数，任务 6 中实现完整重置逻辑
 function resetPageTranslation() {
   translateGeneration++;
   // 移除所有译文 DOM
@@ -443,8 +441,6 @@ async function processQueue() {
   // 再次检查该节点是否已被翻译（避免竞态）
   if (parent && parent.hasAttribute(TRANSLATED_ATTR)) {
     isTranslating = false;
-    await null;
-    if (gen !== translateGeneration) return;
     processQueue();
     return;
   }
