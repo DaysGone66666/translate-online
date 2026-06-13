@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MyMemory project identification mark">
+  <rect x="4" y="8" width="56" height="44" rx="14" fill="#6D4AFF"/>
+  <path d="M16 22h32v18H31l-9 7v-7h-6z" fill="#FFFFFF"/>
+  <path d="M22 35V26h4l6 6 6-6h4v9h-4v-4l-6 6-6-6v4z" fill="#6D4AFF"/>
+</svg>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Translate Online 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="container">
+    <div class="page-title">
+      <span class="op-logo" aria-hidden="true">T</span>
+      <span>Translate Online 设置</span>
+    </div>
+
+    <section class="notice" aria-labelledby="privacy-title">
+      <h2 id="privacy-title">隐私说明</h2>
+      <p>翻译内容会发送给当前选择的服务。所有 API Key 仅保存在本机，不同步到其他浏览器。</p>
+    </section>
+
+    <section class="section provider-section">
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">翻译服务</h2>
+          <p class="section-subtitle">选择免费服务，或配置自己的模型供应商。</p>
+        </div>
+        <label class="provider-search-wrap" for="provider-search">
+          <span class="visually-hidden">搜索供应商</span>
+          <input id="provider-search" class="form-input provider-search" type="search" autocomplete="off" placeholder="搜索供应商">
+        </label>
+      </div>
+
+      <div id="provider-grid" class="provider-grid" role="listbox" aria-label="翻译服务"></div>
+
+      <div id="provider-config" class="provider-config" aria-live="polite">
+        <div class="provider-config-heading">
+          <div>
+            <h3 id="provider-config-title">供应商配置</h3>
+            <p id="provider-config-summary" class="form-help"></p>
+          </div>
+          <span id="provider-free-note" class="free-note" hidden>无需配置</span>
+        </div>
+
+        <div id="provider-display-name-group" class="form-group" hidden>
+          <label class="form-label" for="provider-display-name">显示名称</label>
+          <input id="provider-display-name" class="form-input" type="text" autocomplete="off" placeholder="例如：公司内部网关">
+        </div>
+
+        <div id="provider-api-key-group" class="form-group">
+          <label class="form-label" for="provider-api-key">API Key</label>
+          <input id="provider-api-key" class="form-input" type="password" autocomplete="off" placeholder="输入 API Key">
+          <p class="form-help">仅保存在本机扩展存储中。</p>
+        </div>
+
+        <div id="provider-model-group" class="form-group">
+          <label class="form-label" for="provider-model-preset">模型</label>
+          <select id="provider-model-preset" class="form-select"></select>
+          <input id="provider-custom-model" class="form-input custom-model-input" type="text" autocomplete="off" placeholder="输入模型 ID" hidden>
+        </div>
+
+        <div id="provider-api-url-group" class="form-group">
+          <label class="form-label" for="provider-api-url">API 地址</label>
+          <input id="provider-api-url" class="form-input" type="url" autocomplete="off" placeholder="https://api.example.com/v1">
+          <p class="form-help">保存或测试时，浏览器会请求该 API 地址的访问权限。</p>
+        </div>
+
+        <div class="provider-config-actions">
+          <button id="btn-test-provider" class="btn btn-secondary" type="button" disabled>测试连接</button>
+          <div class="provider-links">
+            <a id="provider-console-link" target="_blank" rel="noreferrer" hidden>控制台</a>
+            <a id="provider-docs-link" target="_blank" rel="noreferrer" hidden>API 文档</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">翻译偏好</h2>
+      <div class="form-group">
+        <label class="form-label" for="source-lang">源语言</label>
+        <select id="source-lang" class="form-select">
+          <option value="auto">自动检测</option>
+          <option value="zh-CN">中文（简体）</option>
+          <option value="zh-TW">中文（繁体）</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="target-lang">目标语言</label>
+        <select id="target-lang" class="form-select">
+          <option value="zh-CN">中文（简体）</option>
+          <option value="zh-TW">中文（繁体）</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+      <div class="chip-group" aria-label="触发方式">
+        <label class="chip chip-active">
+          <input class="visually-hidden" type="checkbox" id="trigger-select" checked>
+          <span>划词自动翻译</span>
+        </label>
+        <span class="chip chip-active">快捷键</span>
+        <label class="chip chip-active">
+          <input class="visually-hidden" type="checkbox" id="trigger-contextmenu" checked>
+          <span>右键菜单</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">自定义术语</h2>
+      <div class="form-group">
+        <label class="form-label" for="custom-glossary">固定翻译</label>
+        <textarea id="custom-glossary" class="form-input form-textarea glossary-textarea" rows="7" placeholder="Player of the week = 本周最佳选手&#10;Stats = 战绩数据"></textarea>
+        <p class="form-help">每行填写一个“源词 = 译文”。自定义术语适用于英文到简体中文，并优先覆盖 HLTV 内置术语。</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">禁用站点</h2>
+      <div class="form-group">
+        <label class="form-label" for="disabled-sites">在以下站点停用扩展</label>
+        <textarea id="disabled-sites" class="form-input form-textarea" rows="3" placeholder="example.com&#10;private.example.org"></textarea>
+        <p class="form-help">每行填写一个主机名，同时对其子域名生效。</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">快捷键</h2>
+      <div class="shortcut-row">
+        <div class="shortcut-display" id="shortcut-display">读取中...</div>
+        <button id="btn-shortcut-help" class="btn btn-small btn-secondary" type="button">修改说明</button>
+      </div>
+      <p class="shortcut-footnote">请在浏览器扩展快捷键页面中修改快捷键。</p>
+    </section>
+
+    <div class="actions">
+      <button id="btn-save" class="btn btn-primary" type="button" disabled>保存设置</button>
+    </div>
+
+    <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+  </main>
+  <script src="shared.js"></script>
+  <script src="providers.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

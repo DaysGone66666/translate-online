@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Translate Online 侧边栏</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <main id="app">
+    <header class="sb-header">
+      <div class="sb-title">
+        <span class="sb-logo" aria-hidden="true">T</span>
+        <span>Translate Online</span>
+      </div>
+      <div class="sb-header-actions">
+        <button id="sb-btn-settings" class="sb-icon-btn" type="button" aria-label="打开设置">设置</button>
+        <button id="sb-btn-clear" class="sb-icon-btn" type="button" aria-label="清除全部历史">清空</button>
+      </div>
+    </header>
+    <div id="sb-status" class="sb-status" role="status" aria-live="polite"></div>
+    <section id="sb-history" class="sb-history" aria-label="翻译历史"></section>
+    <div class="sb-input-area">
+      <label class="visually-hidden" for="sb-input">输入需要翻译的文本</label>
+      <textarea id="sb-input" class="sb-input" placeholder="输入文本翻译..." rows="2"></textarea>
+      <button id="sb-btn-translate" class="sb-btn-primary" type="button">翻译</button>
+    </div>
+  </main>
+  <script src="shared.js"></script>
+  <script src="sidebar.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Translate Online",
+  "version": "1.0.0",
+  "description": "划词与整页翻译工具，支持多种大模型 API 和免费翻译服务",
+  "permissions": ["storage", "sidePanel", "contextMenus", "activeTab"],
+  "host_permissions": [
+    "https://api.mymemory.translated.net/*"
+  ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "src/service-worker.js"
+  },
+  "action": {
+    "default_title": "Translate Online",
+    "default_popup": "src/toolbar-popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/shared.js", "src/floating-toolbar-core.js", "src/page-translation-core.js", "src/content-script.js"],
+      "css": ["src/popup.css"]
+    }
+  ],
+  "side_panel": {
+    "default_path": "src/sidebar.html"
+  },
+  "options_page": "src/options.html",
+  "commands": {
+    "translate-selection": {
+      "suggested_key": { "default": "Ctrl+Shift+E" },
+      "description": "翻译选中文本"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

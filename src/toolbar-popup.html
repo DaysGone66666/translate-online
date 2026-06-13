@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Translate Online</title>
+  <link rel="stylesheet" href="toolbar-popup.css">
+</head>
+<body>
+  <main class="popup-shell">
+    <header class="popup-header">
+      <img class="avatar" src="../images/page-ball-avatar.png" alt="">
+      <div class="brand">
+        <strong>Translate Online</strong>
+        <span id="site-name">读取当前网站...</span>
+      </div>
+      <span class="status-dot" aria-hidden="true"></span>
+    </header>
+
+    <section class="language-row" aria-label="翻译语言">
+      <label class="language-card source-card" for="source-lang">
+        <span class="language-label">源语言</span>
+        <select id="source-lang" disabled>
+          <option value="auto">自动检测</option>
+          <option value="zh-CN">简体中文</option>
+          <option value="zh-TW">繁体中文</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+        </select>
+        <span>选择网页原文语言</span>
+      </label>
+      <span class="language-arrow" aria-hidden="true">→</span>
+      <label class="language-card" for="target-lang">
+        <span class="language-label">目标语言</span>
+        <select id="target-lang" disabled>
+          <option value="zh-CN">简体中文</option>
+          <option value="zh-TW">繁体中文</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+        </select>
+        <span>译文输出语言</span>
+      </label>
+    </section>
+
+    <section class="settings-panel" aria-label="翻译设置">
+      <div class="setting-row">
+        <div>
+          <strong>翻译模式</strong>
+          <span>原文旁显示译文</span>
+        </div>
+        <span class="value-pill">双语对照</span>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <strong>翻译服务</strong>
+          <span>选择当前使用的引擎</span>
+        </div>
+        <div class="provider-picker">
+          <button id="provider-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" disabled>
+            <img id="provider-icon" class="provider-logo" src="../images/providers/mymemory.svg" alt="MyMemory 图标" loading="eager" decoding="async">
+            <span class="provider-trigger-copy"><strong id="provider-name"></strong><small id="provider-model"></small></span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+          <div id="provider-menu" role="listbox" aria-label="翻译服务" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <button id="translate-page" class="translate-button" type="button" disabled>
+      <span>翻译当前页面</span>
+      <kbd>立即执行</kbd>
+    </button>
+
+    <section class="toggle-list" aria-label="快捷设置">
+      <label class="toggle-row">
+        <span>
+          <strong>在此网站禁用扩展</strong>
+          <small>关闭划词与整页翻译</small>
+        </span>
+        <input id="disable-site" type="checkbox" disabled>
+        <i aria-hidden="true"></i>
+      </label>
+      <label class="toggle-row">
+        <span>
+          <strong>划词自动翻译</strong>
+          <small>选中文本后显示翻译</small>
+        </span>
+        <input id="auto-translate" type="checkbox" disabled>
+        <i aria-hidden="true"></i>
+      </label>
+      <label class="toggle-row">
+        <span>
+          <strong>右键翻译菜单</strong>
+          <small>在网页右键菜单中显示</small>
+        </span>
+        <input id="context-menu" type="checkbox" disabled>
+        <i aria-hidden="true"></i>
+      </label>
+    </section>
+
+    <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+
+    <footer class="popup-footer">
+      <button id="open-sidebar" type="button">打开侧边栏</button>
+      <button id="open-options" type="button">扩展设置</button>
+    </footer>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="providers.js"></script>
+  <script src="toolbar-popup.js"></script>
+</body>
+</html>

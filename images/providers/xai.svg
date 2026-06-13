@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="xAI project identification mark">
+  <rect x="5" y="5" width="54" height="54" rx="14" fill="#111111"/>
+  <path d="M18 17h9l8 11 8-11h5L38 32l11 15h-9l-8-11-8 11h-5l10-15z" fill="#FFFFFF"/>
+  <circle cx="47" cy="17" r="4" fill="#8B5CF6"/>
+</svg>
