@@ -441,7 +441,10 @@ label.chip { cursor: pointer; }
     align-items: stretch;
     flex-direction: column;
   }
-  .provider-search-wrap,
+  .provider-search-wrap {
+    width: 100%;
+    flex-basis: auto;
+  }
   .shortcut-display,
   .btn-small { width: 100%; }
   .provider-grid { grid-template-columns: 1fr; }
