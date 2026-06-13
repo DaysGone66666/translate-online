@@ -125,8 +125,8 @@ test('options HTML exposes the exact provider controls and removes legacy engine
     assert.match(html, new RegExp(`id="${id}"`), id);
   }
 
-  assert.match(html, /id="provider-search"[^>]*type="search"[^>]*autocomplete="off"[^>]*placeholder="?????"/);
-  assert.match(html, /id="provider-grid"[^>]*role="listbox"[^>]*aria-label="????"/);
+  assert.match(html, /id="provider-search"[^>]*type="search"[^>]*autocomplete="off"[^>]*placeholder="搜索供应商"/);
+  assert.match(html, /id="provider-grid"[^>]*role="listbox"[^>]*aria-label="翻译服务"/);
   assert.match(html, /id="provider-config"[^>]*aria-live="polite"/);
   assert.match(html, /id="provider-api-key"[^>]*type="password"[^>]*autocomplete="off"/);
   assert.match(html, /id="provider-api-url"[^>]*type="url"/);
@@ -135,8 +135,8 @@ test('options HTML exposes the exact provider controls and removes legacy engine
   assert.match(html, /id="provider-console-link"[^>]*target="_blank"[^>]*rel="noreferrer"/);
   assert.doesNotMatch(html, /name="engine"/);
   assert.doesNotMatch(html, /id="deepseek-config"/);
-  assert.match(html, /???????/);
-  assert.match(html, /API Key[^<]*??????[^<]*???/);
+  assert.match(html, /当前选择的服务/);
+  assert.match(html, /API Key[^<]*仅保存在本机[^<]*不同步/);
 });
 
 test('options loads shared, providers, and page scripts in exact order', () => {
@@ -236,7 +236,7 @@ test('provider form state handles MyMemory, preset models, and custom models', (
   const free = options.getProviderFormState('mymemory', providers.getDefaultProviderConfig('mymemory'));
   assert.equal(free.free, true);
   assert.equal(free.showConfigFields, false);
-  assert.equal(free.freeNote, '????');
+  assert.equal(free.freeNote, '无需配置');
 
   const preset = options.getProviderFormState('openai', {
     model: 'gpt-4.1',
@@ -254,7 +254,7 @@ test('provider form state handles MyMemory, preset models, and custom models', (
   assert.equal(custom.modelPreset, '__custom__');
   assert.equal(custom.customModel, 'private-model');
   assert.equal(custom.modelOptions.at(-1).value, '__custom__');
-  assert.equal(custom.modelOptions.at(-1).label, '?????? ID');
+  assert.equal(custom.modelOptions.at(-1).label, '手动输入模型 ID');
 });
 
 test('captures provider form drafts without storage and permits a temporarily empty custom model', () => {
@@ -575,7 +575,7 @@ test('sync failure reports rollback failure without exposing provider keys', asy
       ensurePermission: async () => true
     }),
     error => {
-      assert.match(error.message, /?????????????/);
+      assert.match(error.message, /保存失败且本地密钥回滚失败/);
       assert.doesNotMatch(error.message, /sensitive-old-key|sensitive-new-key/);
       return true;
     }
@@ -687,7 +687,7 @@ test('permission refusal happens before storage and leaves sync/local untouched'
       preferences: {},
       ensurePermission: async () => false
     }),
-    /????/
+    /访问权限/
   );
   assert.deepEqual(recorder.writes, []);
   assert.deepEqual(recorder.removals, []);
@@ -743,7 +743,7 @@ test('active non-free provider must be complete before any permission request or
         return true;
       }
     }),
-    /?????/
+    /配置不完整/
   );
   assert.equal(permissionCount, 0);
   assert.deepEqual(recorder.writes, []);
@@ -758,7 +758,7 @@ test('normalization rejects an empty model ID for every non-free provider', () =
           'https://gateway.example/v1',
         displayName: 'Gateway'
       }),
-      /?? ID ????/,
+      /模型 ID 不能为空/,
       providerId
     );
   }
@@ -791,7 +791,7 @@ test('saving and testing reject an empty custom model before permission or stora
         return true;
       }
     }),
-    /?? ID ????/
+    /模型 ID 不能为空/
   );
   await assert.rejects(
     options.testProviderConnection({
@@ -806,7 +806,7 @@ test('saving and testing reject an empty custom model before permission or stora
         return { success: true };
       }
     }),
-    /?? ID ????/
+    /模型 ID 不能为空/
   );
 
   assert.equal(permissionCount, 0);
@@ -834,7 +834,7 @@ test('connection test sends the exact message and updates only in-memory status'
     ensurePermission: async () => true,
     sendMessage: async message => {
       sent.push(message);
-      return { success: true, text: '??' };
+      return { success: true, text: '你好' };
     },
     storageCalls
   });
