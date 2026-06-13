@@ -1,76 +1,172 @@
-let popupContainer = null;
-let debounceTimer = null;
+const {
+  STORAGE_KEYS,
+  formatLanguagePair,
+  isSiteDisabled
+} = TranslateOnlineShared;
+
+const {
+  cancelPageRun,
+  collectTranslatableTextNodes,
+  createPageRun,
+  getPageBallPresentation,
+  getTranslationMode,
+  isCurrentPageRun,
+  isMeaningfulText,
+  takeTranslationBatch
+} = TranslateOnlinePageCore;
+
+const {
+  clampToolbarTop,
+  hasDragDistance
+} = TranslateOnlineFloatingToolbarCore;
+
+const BALL_STATES = Object.freeze({ IDLE: 'idle', LOADING: 'loading', DONE: 'done' });
+const ORIGINAL_ATTR = 'data-translate-online-original';
+const RESULT_ATTR = 'data-translate-online-result';
+const STATE_ATTR = 'data-translate-online-state';
+const MAX_CONCURRENT_BATCHES = 2;
+const MAX_BATCH_ITEMS = 12;
+const MAX_BATCH_CHARACTERS = 1600;
+const MAX_RATE_LIMIT_RETRIES = 1;
+const RATE_LIMIT_RETRY_DELAY = 1500;
+const TOOLBAR_AVATAR_SIZE = 36;
+const TOOLBAR_MENU_CLEARANCE = 46;
+const TOOLBAR_CLOSE_DELAY = 180;
+const isHltvSite = location.hostname === 'hltv.org' || location.hostname.endsWith('.hltv.org');
+
 let autoTranslateEnabled = true;
+let disabledSites = [];
+let popupContainer = null;
+let popupRequestId = '';
+let debounceTimer = null;
+let ballEl = null;
+let ballState = BALL_STATES.IDLE;
+let showPageTranslations = true;
+let pageRun = null;
+let pageRunGeneration = 0;
+let requestSequence = 0;
+let lastBallClick = 0;
+let lastUrl = location.href;
+let processedTextNodes = new WeakSet();
+let translationResultByNode = new WeakMap();
+let pageMutationObserver = null;
+let mutationScanTimer = null;
+let pageTranslationEnabled = false;
+let toolbarDrag = null;
+let toolbarCloseTimer = null;
+let suppressAvatarClick = false;
 
-// ====== 加载设置 ======
-chrome.storage.sync.get(['trigger_auto_translate'], (items) => {
-  autoTranslateEnabled = items.trigger_auto_translate !== false;
-});
-// 监听设置变更
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.trigger_auto_translate) {
-    autoTranslateEnabled = changes.trigger_auto_translate.newValue !== false;
+function nextRequestId(prefix, generation = 0) {
+  requestSequence += 1;
+  return `${prefix}-${generation}-${Date.now()}-${requestSequence}`;
+}
+
+function sendCancelRequests(requestIds) {
+  if (!requestIds.length) return;
+  try {
+    chrome.runtime.sendMessage({ type: 'cancel-translations', requestIds }, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch {
+    // The extension may have been reloaded while the page remained open.
   }
-});
+}
 
-// ====== Helper ======
-
-function escapeHtml(str) {
+function escapeHtml(value) {
   const div = document.createElement('div');
-  div.textContent = str;
+  div.textContent = String(value || '');
   return div.innerHTML;
 }
 
-// ====== Popup lifecycle ======
+function extensionEnabledForCurrentSite() {
+  return !isSiteDisabled(location.hostname, disabledSites);
+}
+
+chrome.storage.sync.get([
+  STORAGE_KEYS.AUTO_TRANSLATE,
+  STORAGE_KEYS.DISABLED_SITES
+], items => {
+  autoTranslateEnabled = items[STORAGE_KEYS.AUTO_TRANSLATE] !== false;
+  disabledSites = items[STORAGE_KEYS.DISABLED_SITES] || [];
+  updateSiteAvailability();
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') return;
+  if (changes[STORAGE_KEYS.AUTO_TRANSLATE]) {
+    autoTranslateEnabled = changes[STORAGE_KEYS.AUTO_TRANSLATE].newValue !== false;
+  }
+  if (changes[STORAGE_KEYS.DISABLED_SITES]) {
+    disabledSites = changes[STORAGE_KEYS.DISABLED_SITES].newValue || [];
+    updateSiteAvailability();
+  }
+});
+
+function updateSiteAvailability() {
+  if (extensionEnabledForCurrentSite()) {
+    createBall();
+    return;
+  }
+  closePopup();
+  cancelPageTranslation(true);
+  clearTimeout(toolbarCloseTimer);
+  toolbarCloseTimer = null;
+  toolbarDrag = null;
+  suppressAvatarClick = false;
+  ballEl?.remove();
+  ballEl = null;
+}
+
+// ==================== 划词翻译浮窗 ====================
 
 function closePopup() {
   clearTimeout(debounceTimer);
-  if (popupContainer) {
-    popupContainer.remove();
-    popupContainer = null;
+  if (popupRequestId) {
+    sendCancelRequests([popupRequestId]);
+    popupRequestId = '';
   }
+  popupContainer?.remove();
+  popupContainer = null;
 }
 
-function positionPopup(rect) {
-  const popup = popupContainer.querySelector('.to-popup-card');
-  const popupWidth = 300;
-  const popupHeight = popup.scrollHeight || 180;
+function positionPopup(container, rect) {
+  const bounds = container.getBoundingClientRect();
+  const popupWidth = bounds.width || 300;
+  const popupHeight = bounds.height || 180;
+  const minLeft = window.scrollX + 10;
+  const maxLeft = window.scrollX + window.innerWidth - popupWidth - 10;
 
-  let top, left;
+  let left = rect.left + window.scrollX;
+  let top = rect.bottom + window.scrollY + 6;
+  left = Math.max(minLeft, Math.min(left, maxLeft));
 
-  // 默认在选区下方
-  top = rect.bottom + window.scrollY + 6;
-  left = rect.left + window.scrollX;
-
-  // 水平边界检测
-  if (left + popupWidth > window.innerWidth + window.scrollX - 10) {
-    left = window.innerWidth + window.scrollX - popupWidth - 10;
-  }
-  if (left < window.scrollX + 10) {
-    left = window.scrollX + 10;
-  }
-
-  // 下方空间不足时显示在上方
   if (rect.bottom + popupHeight + 10 > window.innerHeight) {
     top = rect.top + window.scrollY - popupHeight - 6;
   }
+  top = Math.max(window.scrollY + 10, top);
 
-  popupContainer.style.left = `${left}px`;
-  popupContainer.style.top = `${top}px`;
+  container.style.left = `${left}px`;
+  container.style.top = `${top}px`;
 }
 
 function createPopup(text, rect) {
-  closePopup(); // 关闭已有的
+  closePopup();
+  if (!extensionEnabledForCurrentSite()) return;
 
-  popupContainer = document.createElement('div');
-  popupContainer.className = 'to-popup-container';
-  popupContainer.innerHTML = `
-    <div class="to-popup-card">
+  const container = document.createElement('div');
+  const requestId = nextRequestId('selection');
+  popupContainer = container;
+  popupRequestId = requestId;
+
+  container.className = 'to-popup-container';
+  container.setAttribute('data-translate-online-ui', 'selection-popup');
+  container.innerHTML = `
+    <div class="to-popup-card" role="dialog" aria-label="翻译结果">
       <div class="to-popup-header">
-        <span class="to-popup-lang-tag">EN → 中文</span>
+        <span class="to-popup-lang-tag">自动检测 → 目标语言</span>
         <div class="to-popup-header-actions">
-          <button class="to-popup-header-btn" id="to-btn-speak" title="朗读">🔊</button>
-          <button class="to-popup-header-btn" id="to-btn-sidebar" title="打开侧边栏">☰</button>
+          <button type="button" class="to-popup-header-btn" data-action="speak" aria-label="朗读原文">🔊</button>
+          <button type="button" class="to-popup-header-btn" data-action="sidebar" aria-label="打开侧边栏">☰</button>
         </div>
       </div>
       <div class="to-popup-label">原文</div>
@@ -78,40 +174,42 @@ function createPopup(text, rect) {
       <div class="to-popup-divider"></div>
       <div class="to-popup-label">译文</div>
       <div class="to-popup-translation-wrap">
-        <div class="to-popup-translation" id="to-translation-text">
+        <div class="to-popup-translation" aria-live="polite">
           <span class="to-popup-loading">翻译中...</span>
         </div>
       </div>
     </div>
   `;
+  container.style.backgroundImage = `url('${chrome.runtime.getURL('images/popup-bg.png')}')`;
+  document.body.appendChild(container);
+  positionPopup(container, rect);
 
-  // 设置 popup 背景图（通过 chrome.runtime.getURL 获取扩展内资源路径）
-  const bgUrl = chrome.runtime.getURL('images/popup-bg.png');
-  popupContainer.style.backgroundImage = `url('${bgUrl}')`;
-  popupContainer.style.backgroundSize = 'cover';
-  popupContainer.style.backgroundPosition = 'center';
-
-  document.body.appendChild(popupContainer);
-  positionPopup(rect);
-
-  // 绑定按钮事件
-  popupContainer.querySelector('#to-btn-speak').addEventListener('click', () => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    speechSynthesis.speak(utterance);
+  container.querySelector('[data-action="speak"]').addEventListener('click', () => {
+    speechSynthesis.cancel();
+    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   });
-
-  popupContainer.querySelector('#to-btn-sidebar').addEventListener('click', () => {
+  container.querySelector('[data-action="sidebar"]').addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'open-sidebar' });
   });
 
-  // 发送翻译请求
-  chrome.runtime.sendMessage({ type: 'translate', text }, (response) => {
-    if (chrome.runtime.lastError) {
-      return;
+  chrome.runtime.sendMessage({
+    type: 'translate',
+    text,
+    hostname: location.hostname,
+    requestId
+  }, response => {
+    if (chrome.runtime.lastError || popupContainer !== container || !container.isConnected) return;
+    if (popupRequestId === requestId) popupRequestId = '';
+
+    const translationEl = container.querySelector('.to-popup-translation');
+    const languageEl = container.querySelector('.to-popup-lang-tag');
+    if (!translationEl || !languageEl) return;
+
+    if (response?.sourceLang && response?.targetLang) {
+      languageEl.textContent = formatLanguagePair(response.sourceLang, response.targetLang);
     }
-    const translationEl = popupContainer.querySelector('#to-translation-text');
-    if (!translationEl) return;
-    if (response && response.success) {
+
+    if (response?.success) {
       translationEl.textContent = response.text;
       if (response._note) {
         const note = document.createElement('div');
@@ -119,392 +217,491 @@ function createPopup(text, rect) {
         note.textContent = response._note;
         translationEl.appendChild(note);
       }
-      // 保存到历史
-      chrome.runtime.sendMessage({ type: 'save-to-history', text, translation: response.text });
-    } else if (response) {
+      chrome.runtime.sendMessage({
+        type: 'save-to-history',
+        text,
+        translation: response.text,
+        sourceLang: response.sourceLang,
+        targetLang: response.targetLang
+      });
+    } else if (response && response.error !== 'cancelled') {
+      translationEl.innerHTML = `<span class="to-popup-error">${escapeHtml(response.message)}</span>`;
       if (response.needsConfig) {
-        translationEl.innerHTML = `<span class="to-popup-error">${escapeHtml(response.message)}</span> <a href="#" class="to-popup-link" id="to-goto-settings">去设置</a>`;
-        popupContainer.querySelector('#to-goto-settings').addEventListener('click', (e) => {
-          e.preventDefault();
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'to-popup-link';
+        link.textContent = '去设置';
+        link.addEventListener('click', () => {
           chrome.runtime.sendMessage({ type: 'open-options' });
           closePopup();
         });
-      } else {
-        translationEl.innerHTML = `<span class="to-popup-error">${escapeHtml(response.message)}</span>`;
+        translationEl.append(' ', link);
       }
     }
+    positionPopup(container, rect);
   });
 }
 
-// ====== Event listeners ======
-
-// 划词检测 —— mouseup
-document.addEventListener('mouseup', (event) => {
-  if (!autoTranslateEnabled) return;
-
-  // 点击浮窗内按钮时不关闭浮窗（按钮点击会清除文本选区）
-  if (popupContainer && popupContainer.contains(event.target)) {
-    return;
+function selectionRectOrFallback(selection) {
+  if (selection && selection.rangeCount > 0) {
+    return selection.getRangeAt(0).getBoundingClientRect();
   }
+  const centerY = window.innerHeight / 2;
+  return { top: centerY, bottom: centerY, left: window.innerWidth / 2 };
+}
+
+document.addEventListener('mouseup', event => {
+  if (!autoTranslateEnabled || !extensionEnabledForCurrentSite()) return;
+  if (popupContainer?.contains(event.target)) return;
 
   const selection = window.getSelection();
   const text = selection.toString().trim();
-
   if (!text) {
     closePopup();
     return;
   }
 
-  // 检测是否为有效文本（非空、非纯空白）
-
-  // 0.3s 防误触
+  const rect = selectionRectOrFallback(selection);
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    createPopup(text, rect);
-  }, 300);
+  debounceTimer = setTimeout(() => createPopup(text, rect), 300);
 });
 
-// 按 ESC 关闭
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closePopup();
+});
+
+document.addEventListener('mousedown', event => {
+  if (popupContainer && !popupContainer.contains(event.target) && !window.getSelection().toString().trim()) {
     closePopup();
   }
 });
 
-// 点击页面其他地方关闭
-document.addEventListener('mousedown', (event) => {
-  if (popupContainer && !popupContainer.contains(event.target)) {
-    const selection = window.getSelection();
-    if (!selection.toString().trim()) {
-      closePopup();
-    }
+chrome.runtime.onMessage.addListener(request => {
+  if (!extensionEnabledForCurrentSite()) return;
+  if (request.type === 'start-page-translation-command') {
+    startPageTranslation();
+    return;
   }
-});
+  if (request.type !== 'translate-selection' && request.type !== 'translate-selection-command') return;
 
-// ====== Message listener (Service Worker 通信) ======
-
-chrome.runtime.onMessage.addListener((request) => {
-  if (request.type === 'translate-selection' || request.type === 'translate-selection-command') {
-    const selection = window.getSelection();
-    const text = selection.toString().trim();
-    if (text) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      createPopup(text, rect);
-    }
-  }
+  const selection = window.getSelection();
+  const text = request.text || selection.toString().trim();
+  if (text) createPopup(text, selectionRectOrFallback(selection));
 });
 
 // ==================== 页面一键翻译 ====================
 
-// --- CSS 注入 ---
 (function injectPageTranslateStyles() {
   const style = document.createElement('style');
+  style.setAttribute('data-translate-online-ui', 'page-styles');
+  if (isHltvSite) {
+    document.documentElement.setAttribute('data-translate-online-site-theme', 'hltv');
+  }
   style.textContent = `
-/* 浮动小球 */
-.to-ball {
+[data-translate-online-ui="floating-toolbar"] {
+  box-sizing: border-box;
   position: fixed;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -18px;
+  top: calc(50% - 18px);
   width: 36px;
-  height: 60px;
-  border-radius: 18px 0 0 18px;
-  display: flex;
+  height: 36px;
+  z-index: 2147483646;
+  user-select: none;
+  touch-action: none;
+  transition: right 0.2s ease;
+}
+[data-translate-online-ui="floating-toolbar"][data-open="true"],
+[data-translate-online-ui="floating-toolbar"]:focus-within,
+[data-translate-online-ui="floating-toolbar"][data-dragging="true"] {
+  right: 0;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-action {
+  box-sizing: border-box;
+  appearance: none;
+  position: absolute;
+  right: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 50%;
+  color: #d8dadd;
+  background: rgba(20,21,24,0.96);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.24), inset 0 1px rgba(255,255,255,0.05);
   cursor: pointer;
-  z-index: 2147483646;
-  transition: background 0.3s, opacity 0.2s;
-  user-select: none;
-  writing-mode: vertical-lr;
-  font-size: 14px;
-  font-weight: 600;
+  font: 700 16px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.2s ease, border-color 0.18s, background 0.18s;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-action:hover,
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-action:focus-visible {
+  border-color: rgba(125,211,252,0.62);
+  background: rgba(35,38,44,0.98);
+  outline: none;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-action:focus-visible {
+  box-shadow: 0 0 0 3px rgba(125,211,252,0.26), 0 4px 16px rgba(0,0,0,0.24);
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--translate-online-rem-avatar) center / cover no-repeat #111827;
+}
+[data-translate-online-ui="floating-toolbar"] [data-toolbar-action="translate"] {
+  bottom: calc(100% + 8px);
+  color: #dcecff;
+  transform: translateY(8px) scale(0.84);
+}
+[data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"] {
+  top: 0;
+  width: 36px;
+  height: 36px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  cursor: grab;
+}
+[data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"]:active {
+  cursor: grabbing;
+}
+[data-translate-online-ui="floating-toolbar"] [data-toolbar-action="settings"] {
+  top: calc(100% + 8px);
+  transform: translateY(-8px) scale(0.84);
+}
+[data-translate-online-ui="floating-toolbar"][data-open="true"] [data-toolbar-action="translate"],
+[data-translate-online-ui="floating-toolbar"][data-open="true"] [data-toolbar-action="settings"],
+[data-translate-online-ui="floating-toolbar"]:focus-within [data-toolbar-action="translate"],
+[data-translate-online-ui="floating-toolbar"]:focus-within [data-toolbar-action="settings"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+[data-translate-online-ui="floating-toolbar"][data-state="loading"] [data-toolbar-action="translate"] {
+  border-color: #7dd3fc;
+  animation: translate-online-rem-pulse 1s ease-in-out infinite alternate;
+}
+[data-translate-online-result] {
+  box-sizing: border-box;
+  max-width: 100%;
+  font: inherit;
+  font-size: 0.96em;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  opacity: 0.82;
+  border: 0;
+}
+[data-translate-online-site-theme="hltv"] [data-translate-online-result] {
+  color: #00c896 !important;
+  opacity: 1;
+}
+[data-translate-online-result][data-translate-online-mode="block"] {
+  display: block;
+  padding: 0;
+  margin: 0.14em 0 0;
+}
+[data-translate-online-result][data-translate-online-mode="inline"] {
+  display: inline;
+  margin-left: 0.32em;
+  padding: 0;
+}
+[data-translate-online-result][hidden] { display: none !important; }
+[data-translate-online-ui="page-toast"] {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 1px solid rgba(186,230,253,0.28);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(8,24,56,0.96), rgba(5,14,38,0.94));
   color: #fff;
-  box-shadow: 0 2px 10px rgba(102,126,234,0.35);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  box-shadow: 0 10px 32px rgba(2,6,23,0.38), 0 0 20px rgba(56,189,248,0.12);
+  backdrop-filter: blur(16px);
 }
-.to-ball--idle { background: linear-gradient(180deg, #667eea, #764ba2); }
-.to-ball--loading { background: linear-gradient(180deg, #f39c12, #e67e22); }
-.to-ball--done { background: linear-gradient(180deg, #27ae60, #2ecc71); }
-
-/* 译文段落（后续任务使用，现在先定义） */
-.to-tr {
-  background: rgba(255,255,255,0.92);
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin: 6px 0 6px 0;
-  font-size: inherit;
-  line-height: 1.7;
-  color: #111;
-  border-left: 3px solid #667eea;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+@keyframes translate-online-rem-pulse {
+  to { box-shadow: 0 0 0 4px rgba(125,211,252,0.16), 0 4px 16px rgba(0,0,0,0.24); }
 }
-.to-tr-hidden { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-translate-online-ui="floating-toolbar"],
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-action { transition: none; }
+  [data-translate-online-ui="floating-toolbar"][data-state="loading"] [data-toolbar-action="translate"] { animation: none; }
+}
 `;
   document.head.appendChild(style);
 })();
 
-// --- 小球状态 ---
-const BALL_STATES = { IDLE: 'idle', LOADING: 'loading', DONE: 'done' };
-let ballState = BALL_STATES.IDLE;
-let ballEl = null;
-
-// --- 小球点击处理 ---
-let lastBallClick = 0;
-
-function onBallClick() {
-  // 500ms 节流
-  const now = Date.now();
-  if (now - lastBallClick < 500) return;
-  lastBallClick = now;
-
-  switch (ballState) {
-    case BALL_STATES.IDLE:
-      startPageTranslation();
-      break;
-    case BALL_STATES.DONE:
-      toggleAllTranslations();
-      break;
-    case BALL_STATES.LOADING:
-      // 翻译中，点击取消翻译
-      cancelTranslation();
-      break;
-  }
+function showPageToast(message) {
+  document.querySelector('[data-translate-online-ui="page-toast"]')?.remove();
+  const toast = document.createElement('div');
+  toast.setAttribute('data-translate-online-ui', 'page-toast');
+  toast.setAttribute('role', 'status');
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
 }
 
 function createBall() {
-  if (ballEl) return;
+  if (ballEl || !document.body || !extensionEnabledForCurrentSite()) return;
   ballEl = document.createElement('div');
-  ballEl.className = 'to-ball to-ball--idle';
-  ballEl.textContent = '译';
-  ballEl.setAttribute('role', 'button');
-  ballEl.setAttribute('tabindex', '0');
-  ballEl.setAttribute('aria-label', '翻译页面');
-  ballEl.addEventListener('click', onBallClick);
+  ballEl.setAttribute('data-translate-online-ui', 'floating-toolbar');
+  ballEl.setAttribute('aria-label', '翻译悬浮工具条');
+  ballEl.style.setProperty(
+    '--translate-online-rem-avatar',
+    `url('${chrome.runtime.getURL('images/page-ball-avatar.png')}')`
+  );
+  ballEl.innerHTML = `
+    <button class="to-toolbar-action" data-toolbar-action="translate" type="button">
+      <span aria-hidden="true">译</span>
+    </button>
+    <button class="to-toolbar-action" data-toolbar-action="sidebar" type="button" aria-label="打开翻译记录">
+      <span class="to-toolbar-avatar" aria-hidden="true"></span>
+    </button>
+    <button class="to-toolbar-action" data-toolbar-action="settings" type="button" aria-label="打开翻译设置">
+      <span aria-hidden="true">⚙</span>
+    </button>
+  `;
+  const translateButton = ballEl.querySelector('[data-toolbar-action="translate"]');
+  const avatarButton = ballEl.querySelector('[data-toolbar-action="sidebar"]');
+  const settingsButton = ballEl.querySelector('[data-toolbar-action="settings"]');
+
+  avatarButton.addEventListener('pointerenter', openToolbarMenu);
+  translateButton.addEventListener('pointerenter', cancelToolbarClose);
+  settingsButton.addEventListener('pointerenter', cancelToolbarClose);
+  ballEl.addEventListener('pointerenter', cancelToolbarClose);
+  ballEl.addEventListener('pointerleave', scheduleToolbarClose);
+  ballEl.addEventListener('focusin', openToolbarMenu);
+  ballEl.addEventListener('focusout', event => {
+    if (!ballEl.contains(event.relatedTarget)) scheduleToolbarClose();
+  });
+  translateButton.addEventListener('click', event => {
+    onBallClick();
+    blurMouseActivatedButton(event);
+    scheduleToolbarClose();
+  });
+  avatarButton.addEventListener('click', event => {
+    if (suppressAvatarClick) {
+      suppressAvatarClick = false;
+      event.preventDefault();
+      blurMouseActivatedButton(event);
+      return;
+    }
+    chrome.runtime.sendMessage({ type: 'open-sidebar' });
+    blurMouseActivatedButton(event);
+  });
+  settingsButton.addEventListener('click', event => {
+    chrome.runtime.sendMessage({ type: 'open-options' });
+    blurMouseActivatedButton(event);
+    scheduleToolbarClose();
+  });
+  setupToolbarDragging(avatarButton);
   document.body.appendChild(ballEl);
+  loadToolbarTop();
+  setBallState(BALL_STATES.IDLE);
+}
+
+function cancelToolbarClose() {
+  clearTimeout(toolbarCloseTimer);
+  toolbarCloseTimer = null;
+}
+
+function openToolbarMenu() {
+  cancelToolbarClose();
+  if (ballEl) ballEl.dataset.open = 'true';
+}
+
+function scheduleToolbarClose() {
+  cancelToolbarClose();
+  toolbarCloseTimer = setTimeout(() => {
+    toolbarCloseTimer = null;
+    if (!ballEl || ballEl.dataset.dragging === 'true' || ballEl.matches(':focus-within')) return;
+    delete ballEl.dataset.open;
+  }, TOOLBAR_CLOSE_DELAY);
+}
+
+function blurMouseActivatedButton(event) {
+  if (event.detail > 0) event.currentTarget.blur();
 }
 
 function setBallState(state) {
   ballState = state;
   if (!ballEl) return;
-  ballEl.className = 'to-ball';
-  switch (state) {
-    case BALL_STATES.IDLE:
-      ballEl.classList.add('to-ball--idle');
-      ballEl.textContent = '译';
-      break;
-    case BALL_STATES.LOADING:
-      ballEl.classList.add('to-ball--loading');
-      ballEl.textContent = '⟳';
-      break;
-    case BALL_STATES.DONE:
-      ballEl.classList.add('to-ball--done');
-      ballEl.textContent = '原文';
-      break;
+  ballEl.dataset.state = state;
+  const presentation = getPageBallPresentation(state, showPageTranslations);
+  const translateButton = ballEl.querySelector('[data-toolbar-action="translate"]');
+  translateButton.setAttribute('aria-label', presentation.ariaLabel);
+  translateButton.title = presentation.label;
+}
+
+function setToolbarTop(top) {
+  if (!ballEl) return 0;
+  const clampedTop = clampToolbarTop(
+    top,
+    window.innerHeight,
+    TOOLBAR_AVATAR_SIZE,
+    TOOLBAR_MENU_CLEARANCE
+  );
+  ballEl.style.top = `${clampedTop}px`;
+  return clampedTop;
+}
+
+function loadToolbarTop() {
+  chrome.storage.local.get([STORAGE_KEYS.FLOATING_TOOLBAR_TOP], items => {
+    if (!ballEl || chrome.runtime.lastError) return;
+    const savedTop = Number(items[STORAGE_KEYS.FLOATING_TOOLBAR_TOP]);
+    const defaultTop = (window.innerHeight - TOOLBAR_AVATAR_SIZE) / 2;
+    setToolbarTop(Number.isFinite(savedTop) ? savedTop : defaultTop);
+  });
+}
+
+function saveToolbarTop() {
+  if (!ballEl) return;
+  const top = setToolbarTop(Number.parseFloat(ballEl.style.top));
+  chrome.storage.local.set({ [STORAGE_KEYS.FLOATING_TOOLBAR_TOP]: top });
+}
+
+function setupToolbarDragging(handle) {
+  handle.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0 || !ballEl) return;
+    cancelToolbarClose();
+    openToolbarMenu();
+    suppressAvatarClick = false;
+    toolbarDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startTop: ballEl.getBoundingClientRect().top,
+      moved: false
+    };
+    ballEl.dataset.dragging = 'true';
+    handle.setPointerCapture(event.pointerId);
+  });
+
+  handle.addEventListener('pointermove', event => {
+    if (!toolbarDrag || event.pointerId !== toolbarDrag.pointerId) return;
+    if (!toolbarDrag.moved) {
+      toolbarDrag.moved = hasDragDistance(
+        toolbarDrag.startX,
+        toolbarDrag.startY,
+        event.clientX,
+        event.clientY
+      );
+    }
+    if (!toolbarDrag.moved) return;
+    suppressAvatarClick = true;
+    setToolbarTop(toolbarDrag.startTop + event.clientY - toolbarDrag.startY);
+    event.preventDefault();
+  });
+
+  const finishDrag = event => {
+    if (!toolbarDrag || event.pointerId !== toolbarDrag.pointerId) return;
+    const moved = toolbarDrag.moved;
+    if (moved) saveToolbarTop();
+    toolbarDrag = null;
+    if (ballEl) delete ballEl.dataset.dragging;
+    if (handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+    if (moved) {
+      suppressAvatarClick = event.type === 'pointerup';
+      setTimeout(() => {
+        suppressAvatarClick = false;
+      }, 0);
+    }
+    scheduleToolbarClose();
+  };
+  handle.addEventListener('pointerup', finishDrag);
+  handle.addEventListener('pointercancel', finishDrag);
+}
+
+function onBallClick() {
+  const now = Date.now();
+  if (now - lastBallClick < 500) return;
+  lastBallClick = now;
+
+  if (ballState === BALL_STATES.IDLE) {
+    startPageTranslation();
+  } else if (ballState === BALL_STATES.LOADING) {
+    cancelPageTranslation(true);
+  } else {
+    toggleAllTranslations();
   }
 }
 
-// 页面加载后创建小球
+window.addEventListener('resize', () => {
+  if (!ballEl) return;
+  setToolbarTop(ballEl.getBoundingClientRect().top);
+});
+
 if (document.readyState !== 'loading') {
   createBall();
 } else {
-  window.addEventListener('DOMContentLoaded', createBall);
+  window.addEventListener('DOMContentLoaded', createBall, { once: true });
 }
 
-// --- 文本节点收集 ---
-const TRANSLATED_ATTR = 'data-to-translated';
-const ORIGINAL_ATTR = 'data-to-original';
-
-function resetPageTranslation() {
-  translateGeneration++;
-  // 移除所有译文 DOM
-  document.querySelectorAll('.to-tr').forEach(el => el.remove());
-  // 清除原文标记
-  document.querySelectorAll(`[${ORIGINAL_ATTR}]`).forEach(el => {
-    el.removeAttribute(ORIGINAL_ATTR);
-  });
-  document.querySelectorAll(`[${TRANSLATED_ATTR}]`).forEach(el => {
-    el.removeAttribute(TRANSLATED_ATTR);
-  });
-  // 重置队列
-  translateQueue = [];
-  activeTranslations = 0;
-  idCounter = 0;
-  observers.forEach(obs => obs.disconnect());
-  observers = [];
-  // 重置小球
-  setBallState(BALL_STATES.IDLE);
-  toggleShowTranslations = true;
-}
-
-function collectTextNodes() {
+function collectTextNodes(root = document.body) {
   const nodes = [];
-  const walker = document.createTreeWalker(
-    document.body,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode: (textNode) => {
-        // 跳过已翻译节点
-        const parent = textNode.parentElement;
-        if (!parent || parent.hasAttribute(TRANSLATED_ATTR)) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        // 跳过不可见元素
-        const style = window.getComputedStyle(parent);
-        if (style.display === 'none' || style.visibility === 'hidden') {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        // 跳过 script/style/noscript
-        const tag = parent.tagName;
-        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        // 跳过代码块
-        if (tag === 'CODE' || tag === 'PRE' || tag === 'KBD') {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        // 跳过 translate="no" 祖先
-        let el = parent;
-        while (el) {
-          if (el.getAttribute && el.getAttribute('translate') === 'no') {
-            return NodeFilter.FILTER_REJECT;
-          }
-          el = el.parentElement;
-        }
-
-        // 跳过太短的文本（≤3字符）
-        const text = textNode.textContent.trim();
-        if (text.length <= 3) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        return NodeFilter.FILTER_ACCEPT;
-      }
-    }
-  );
-
-  while (walker.nextNode()) {
-    nodes.push(walker.currentNode);
-  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) nodes.push(walker.currentNode);
   return nodes;
 }
 
-// --- 翻译队列 ---
-let translateQueue = [];
-let activeTranslations = 0;
-const MAX_CONCURRENT = 2;
-let observers = [];
-let translateGeneration = 0;
-let toggleShowTranslations = true; // 当前是否显示译文
-
-function pushToQueue(textNode) {
-  // 去重
-  if (translateQueue.some(item => item.textNode === textNode)) return;
-  translateQueue.push({ textNode, text: textNode.textContent.trim() });
+function isVisibleTextNode(textNode) {
+  let element = textNode.parentElement;
+  while (element) {
+    if (element.hidden || element.getAttribute('aria-hidden') === 'true') return false;
+    const style = window.getComputedStyle(element);
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.opacity === '0' ||
+      style.contentVisibility === 'hidden'
+    ) {
+      return false;
+    }
+    if (element === document.body) break;
+    element = element.parentElement;
+  }
+  return !!textNode.parentElement?.getClientRects().length;
 }
 
-function sortQueueByViewport() {
-  translateQueue.sort((a, b) => {
-    const aInView = isInViewport(a.textNode.parentElement);
-    const bInView = isInViewport(b.textNode.parentElement);
-    if (aInView && !bInView) return -1;
-    if (!aInView && bInView) return 1;
-    return 0;
-  });
+function collectTranslationItems() {
+  const textNodes = collectTranslatableTextNodes(collectTextNodes(), document.body);
+  return textNodes
+    .filter(textNode => !processedTextNodes.has(textNode) && isVisibleTextNode(textNode))
+    .map(textNode => ({
+      textNode,
+      text: textNode.textContent.replace(/\s+/g, ' ').trim(),
+      mode: getTranslationMode(textNode)
+    }))
+    .filter(item => isMeaningfulText(item.text));
 }
 
-function isInViewport(el) {
-  if (!el) return false;
-  const rect = el.getBoundingClientRect();
+function isInViewport(textNode) {
+  const rect = textNode.parentElement.getBoundingClientRect();
   return rect.top < window.innerHeight && rect.bottom > 0;
 }
 
-async function processQueue() {
-  const gen = translateGeneration;
-
-  // 启动尽可能多的并发 worker
-  while (activeTranslations < MAX_CONCURRENT && translateQueue.length > 0) {
-    activeTranslations++;
-    processOne(gen);
-  }
-
-  // 全部完成且队列空 → DONE
-  if (activeTranslations === 0 && translateQueue.length === 0) {
-    setBallState(BALL_STATES.DONE);
-  }
+function sortQueueByViewport(run) {
+  run.queue.sort((a, b) => Number(isInViewport(b.textNode)) - Number(isInViewport(a.textNode)));
 }
 
-async function processOne(gen) {
-  sortQueueByViewport();
-
-  if (translateQueue.length === 0) {
-    activeTranslations--;
-    if (activeTranslations === 0 && translateQueue.length === 0) {
-      setBallState(BALL_STATES.DONE);
-    }
-    return;
-  }
-
-  const { textNode, text } = translateQueue.shift();
-  const parent = textNode.parentElement;
-
-  // 再次检查该节点是否已被翻译（避免竞态）
-  if (parent && parent.hasAttribute(TRANSLATED_ATTR)) {
-    // 跳过，处理下一个
-    processOne(gen);
-    return;
-  }
-
-  try {
-    const response = await translateText(text);
-    if (gen !== translateGeneration) { activeTranslations--; return; }
-    if (response && response.success) {
-      injectTranslation(textNode, response.text);
-      if (parent) {
-        parent.setAttribute(TRANSLATED_ATTR, '');
-      }
-    } else if (response && response.error === 'rate_limited') {
-      // 429：放回队列头部，暂停 5 秒
-      translateQueue.unshift({ textNode, text });
-      activeTranslations--;
-      await sleep(5000);
-      if (gen !== translateGeneration) return;
-      processQueue();
-      return;
-    } else if (response && response.error === 'unauthorized') {
-      // 401：停止所有翻译
-      activeTranslations = 0;
-      setBallState(BALL_STATES.IDLE);
-      alert('Translate Online: API Key 无效，请检查设置');
-      resetPageTranslation();
-      return;
-    }
-    // 其他错误：跳过此节点，继续
-  } catch (err) {
-    // 扩展重载后 context invalidated 是正常现象，静默跳过
-    if (!err.message || !err.message.includes('context invalidated')) {
-      console.warn('[Translate Online] 翻译节点时出错:', err);
-    }
-  }
-
-  // 继续处理下一个
-  processOne(gen);
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function translateText(text) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'translate', text }, (response) => {
+function translateBatch(items, requestId) {
+  return new Promise(resolve => {
+    chrome.runtime.sendMessage({
+      type: 'translate-batch',
+      texts: items.map(item => item.text),
+      hostname: location.hostname,
+      requestId
+    }, response => {
       if (chrome.runtime.lastError) {
         resolve({ success: false, error: 'runtime_error', message: chrome.runtime.lastError.message });
         return;
@@ -514,149 +711,236 @@ function translateText(text) {
   });
 }
 
-// --- 双语 DOM 注入 ---
-let idCounter = 0;
+function injectTranslation(item, translation) {
+  const { textNode, mode } = item;
+  if (!textNode.isConnected || !textNode.parentNode) return false;
 
-function injectTranslation(textNode, translation) {
-  const parent = textNode.parentElement;
-  if (!parent) return;
+  const id = `t${pageRunGeneration}-${requestSequence}`;
+  translationResultByNode.get(textNode)?.remove();
 
-  const tag = parent.tagName;
-  if (tag === 'LI' || tag === 'TD' || tag === 'TH' || tag === 'DT' || tag === 'BUTTON') return;
-
-  const id = 't' + (++idCounter);
-
-  // 给原文段落打标记
-  parent.setAttribute(ORIGINAL_ATTR, id);
-
-  // 创建译文段落
-  const trEl = document.createElement('div');
-  trEl.className = 'to-tr';
-  trEl.setAttribute('data-to-src', id);
-  trEl.textContent = translation;
-
-  // 插入到原文段落后面
-  parent.insertAdjacentElement('afterend', trEl);
+  const result = document.createElement('span');
+  result.setAttribute(RESULT_ATTR, id);
+  result.setAttribute('data-translate-online-mode', mode);
+  result.setAttribute('translate', 'no');
+  result.textContent = translation;
+  if (!isHltvSite) {
+    const sourceColor = getComputedStyle(textNode.parentElement).color;
+    result.style.setProperty('color', sourceColor, 'important');
+  }
+  textNode.parentNode.insertBefore(result, textNode.nextSibling);
+  translationResultByNode.set(textNode, result);
+  return true;
 }
 
-// --- 视口观察 ---
-function setupViewportObservers(textNodes) {
-  // 清理旧 observer
-  observers.forEach(obs => obs.disconnect());
-  observers = [];
+function processPageRun(run) {
+  if (!isCurrentPageRun(pageRun, run)) return;
+  sortQueueByViewport(run);
 
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const textNodes = entry.target._toTextNodes;
-        if (textNodes && textNodes.length) {
-          textNodes.forEach(textNode => {
-            if (textNode && textNode.parentElement && !textNode.parentElement.hasAttribute(TRANSLATED_ATTR)) {
-              pushToQueue(textNode);
-            }
-          });
-          sortQueueByViewport();
-          processQueue();
-        }
-        observer.unobserve(entry.target);
-        delete entry.target._toTextNodes;
-      }
-    });
-  }, { rootMargin: '100px' });
+  while (run.activeRequestIds.size < MAX_CONCURRENT_BATCHES && run.queue.length > 0) {
+    const batch = takeTranslationBatch(run.queue, MAX_BATCH_ITEMS, MAX_BATCH_CHARACTERS);
+    const requestId = nextRequestId('page', run.generation);
+    run.activeRequestIds.add(requestId);
+    processPageBatch(run, batch, requestId);
+  }
 
-  for (const textNode of textNodes) {
-    const parent = textNode.parentElement;
-    if (parent && !parent.hasAttribute(TRANSLATED_ATTR)) {
-      // 判断是否已在视口内
-      if (isInViewport(parent)) {
-        pushToQueue(textNode);
-      } else {
-        // 未在视口内 → 用 observer 守候
-        if (!parent._toTextNodes) {
-          parent._toTextNodes = [];
-          observer.observe(parent);
-        }
-        parent._toTextNodes.push(textNode);
-      }
+  if (
+    run.activeRequestIds.size === 0 &&
+    run.pendingRetryCount === 0 &&
+    run.queue.length === 0 &&
+    !run.completed
+  ) {
+    run.completed = true;
+    if (run.successCount > 0) {
+      setBallState(BALL_STATES.DONE);
+    } else if (run.skippedCount > 0) {
+      setBallState(BALL_STATES.IDLE);
+      showPageToast('当前页面内容已是目标语言，无需重复翻译');
+    } else {
+      setBallState(BALL_STATES.IDLE);
+      showPageToast('页面内容未能完成翻译，请检查网络或翻译设置');
     }
   }
-  observers.push(observer);
-
-  // 视口内的排最前面，视口外的靠后
-  sortQueueByViewport();
-  processQueue();
 }
 
-// --- 启动翻译 & 切换 ---
-function cancelTranslation() {
-  translateGeneration++;
-  activeTranslations = 0;
-  translateQueue = [];
-  idCounter = 0;
-  observers.forEach(obs => obs.disconnect());
-  observers = [];
-  // 移除已产生的译文
-  document.querySelectorAll('.to-tr').forEach(el => el.remove());
-  document.querySelectorAll(`[${ORIGINAL_ATTR}]`).forEach(el => el.removeAttribute(ORIGINAL_ATTR));
-  document.querySelectorAll(`[${TRANSLATED_ATTR}]`).forEach(el => el.removeAttribute(TRANSLATED_ATTR));
+function scheduleRateLimitRetries(run, items) {
+  if (!items.length) return;
+  run.pendingRetryCount += items.length;
+  setTimeout(() => {
+    if (!isCurrentPageRun(pageRun, run)) return;
+    run.pendingRetryCount -= items.length;
+    run.queue.unshift(...items);
+    processPageRun(run);
+  }, RATE_LIMIT_RETRY_DELAY);
+}
+
+async function processPageBatch(run, batch, requestId) {
+  const retryItems = [];
+  try {
+    const response = await translateBatch(batch, requestId);
+    if (!isCurrentPageRun(pageRun, run)) return;
+
+    const results = response?.success && Array.isArray(response.results)
+      ? response.results
+      : batch.map(() => response);
+
+    for (let index = 0; index < batch.length; index += 1) {
+      const item = batch[index];
+      const result = results[index] || {
+        success: false,
+        error: 'missing_result',
+        message: '翻译服务未返回对应结果'
+      };
+
+      if (result.success && result.skipped) {
+        run.skippedCount += 1;
+      } else if (result.success) {
+        if (injectTranslation(item, result.text)) run.successCount += 1;
+      } else if (
+        result.error === 'rate_limited' &&
+        (item.rateLimitRetries || 0) < MAX_RATE_LIMIT_RETRIES
+      ) {
+        item.rateLimitRetries = (item.rateLimitRetries || 0) + 1;
+        retryItems.push(item);
+      } else if (result.error === 'unauthorized') {
+        showPageToast('API Key 无效，请检查设置');
+        cancelPageTranslation(true);
+        return;
+      } else if (result.error !== 'cancelled') {
+        processedTextNodes.delete(item.textNode);
+      }
+    }
+  } catch (error) {
+    if (!error.message?.includes('context invalidated')) {
+      console.warn('[Translate Online] 翻译页面内容时出错:', error);
+    }
+    batch.forEach(item => processedTextNodes.delete(item.textNode));
+  } finally {
+    if (!isCurrentPageRun(pageRun, run)) return;
+    run.activeRequestIds.delete(requestId);
+    scheduleRateLimitRetries(run, retryItems);
+    processPageRun(run);
+  }
+}
+
+function clearPageTranslations() {
+  stopPageMutationObserver();
+  document.querySelectorAll(`[${RESULT_ATTR}]`).forEach(element => element.remove());
+  document.querySelectorAll(`[${ORIGINAL_ATTR}]`).forEach(element => element.removeAttribute(ORIGINAL_ATTR));
+  document.querySelectorAll(`[${STATE_ATTR}]`).forEach(element => element.removeAttribute(STATE_ATTR));
+  processedTextNodes = new WeakSet();
+  translationResultByNode = new WeakMap();
+  pageTranslationEnabled = false;
+  showPageTranslations = true;
+}
+
+function cancelPageTranslation(removeResults) {
+  if (pageRun) {
+    sendCancelRequests(cancelPageRun(pageRun));
+    pageRun = null;
+  }
+  if (removeResults) clearPageTranslations();
   setBallState(BALL_STATES.IDLE);
-  toggleShowTranslations = true;
 }
 
 function startPageTranslation() {
-  const textNodes = collectTextNodes();
-  if (textNodes.length === 0) return;
+  clearPageTranslations();
+  const items = collectTranslationItems();
+  if (!items.length) {
+    showPageToast('当前页面没有可翻译的正文内容');
+    return;
+  }
 
-  translateGeneration++;
+  pageTranslationEnabled = true;
+  showPageTranslations = true;
+  startPageMutationObserver();
   setBallState(BALL_STATES.LOADING);
-  toggleShowTranslations = true;
-  translateQueue = [];
-  activeTranslations = 0;
-  idCounter = 0;
-  observers.forEach(obs => obs.disconnect());
-  observers = [];
-
-  setupViewportObservers(textNodes);
+  queueTranslationItems(items);
 }
 
 function toggleAllTranslations() {
-  toggleShowTranslations = !toggleShowTranslations;
-  const trNodes = document.querySelectorAll('.to-tr');
-  trNodes.forEach(el => {
-    if (toggleShowTranslations) {
-      el.classList.remove('to-tr-hidden');
-    } else {
-      el.classList.add('to-tr-hidden');
+  showPageTranslations = !showPageTranslations;
+  document.querySelectorAll(`[${RESULT_ATTR}]`).forEach(element => {
+    element.hidden = !showPageTranslations;
+  });
+  setBallState(BALL_STATES.DONE);
+}
+
+function queueTranslationItems(items) {
+  const pending = items.filter(item => !processedTextNodes.has(item.textNode));
+  if (!pending.length) return false;
+  pending.forEach(item => processedTextNodes.add(item.textNode));
+
+  if (!pageRun || pageRun.cancelled || pageRun.completed) {
+    pageRunGeneration += 1;
+    pageRun = createPageRun(pending, pageRunGeneration);
+  } else {
+    pageRun.queue.push(...pending);
+    pageRun.completed = false;
+  }
+
+  setBallState(BALL_STATES.LOADING);
+  processPageRun(pageRun);
+  return true;
+}
+
+function isExtensionMutationNode(node) {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  return node.hasAttribute(RESULT_ATTR) ||
+    node.hasAttribute('data-translate-online-ui') ||
+    !!node.closest(`[${RESULT_ATTR}], [data-translate-online-ui]`);
+}
+
+function scheduleIncrementalTranslation() {
+  clearTimeout(mutationScanTimer);
+  mutationScanTimer = setTimeout(() => {
+    if (!pageTranslationEnabled) return;
+    queueTranslationItems(collectTranslationItems());
+  }, 300);
+}
+
+function startPageMutationObserver() {
+  stopPageMutationObserver();
+  pageMutationObserver = new MutationObserver(mutations => {
+    let shouldScan = false;
+
+    for (const mutation of mutations) {
+      if (mutation.type === 'characterData') {
+        const textNode = mutation.target;
+        translationResultByNode.get(textNode)?.remove();
+        translationResultByNode.delete(textNode);
+        processedTextNodes.delete(textNode);
+        shouldScan = true;
+        continue;
+      }
+
+      if ([...mutation.addedNodes].some(node => !isExtensionMutationNode(node))) {
+        shouldScan = true;
+      }
     }
+
+    if (shouldScan) scheduleIncrementalTranslation();
+  });
+  pageMutationObserver.observe(document.body, {
+    childList: true,
+    characterData: true,
+    subtree: true
   });
 }
 
-// --- SPA 路由检测 ---
-let lastUrl = location.href;
-
-function setupSpaObserver() {
-  const origPushState = history.pushState;
-  const origReplaceState = history.replaceState;
-
-  history.pushState = function () {
-    origPushState.apply(this, arguments);
-    checkUrlChange();
-  };
-  history.replaceState = function () {
-    origReplaceState.apply(this, arguments);
-    checkUrlChange();
-  };
-
-  window.addEventListener('popstate', checkUrlChange);
-  window.addEventListener('hashchange', checkUrlChange);
+function stopPageMutationObserver() {
+  clearTimeout(mutationScanTimer);
+  mutationScanTimer = null;
+  pageMutationObserver?.disconnect();
+  pageMutationObserver = null;
 }
 
 function checkUrlChange() {
-  if (location.href !== lastUrl) {
-    lastUrl = location.href;
-    resetPageTranslation();
-  }
+  if (location.href === lastUrl) return;
+  lastUrl = location.href;
+  closePopup();
+  cancelPageTranslation(true);
 }
 
-// 启动 SPA 监听
-setupSpaObserver();
+window.addEventListener('popstate', checkUrlChange);
+window.addEventListener('hashchange', checkUrlChange);
+setInterval(checkUrlChange, 1000);

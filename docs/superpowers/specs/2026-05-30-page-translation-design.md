@@ -1,5 +1,8 @@
 # Translate Online — 页面一键翻译设计规格
 
+> 历史设计文档。当前实现已改为块级元素任务、最多两个并发请求和独立运行取消模型，
+> 以 `docs/superpowers/specs/2026-06-07-reliability-accessibility-design.md` 为准。
+
 ## 概述
 
 在现有划词翻译插件基础上，新增"页面一键翻译"功能。用户点击页面右侧吸附小球，整页文本自动翻译并以双语对照模式展示。翻译引擎沿用用户当前设置（免费 MyMemory 或 DeepSeek）。

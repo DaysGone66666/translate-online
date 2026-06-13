@@ -1,0 +1,9 @@
+{
+  "name": "translate-online",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/shared.js && node --check src/providers.js && node --check src/provider-adapters.js && node --check src/glossary.js && node --check src/floating-toolbar-core.js && node --check src/page-translation-core.js && node --check src/content-script.js && node --check src/service-worker.js && node --check src/options.js && node --check src/sidebar.js && node --check src/toolbar-popup.js && node --check generate-icons.js && node --check scripts/check-project.js && node scripts/check-project.js"
+  }
+}

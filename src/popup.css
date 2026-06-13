@@ -1,5 +1,5 @@
 /* src/popup.css — 毛玻璃主题 */
-.to-popup-container {
+[data-translate-online-ui="selection-popup"] {
   position: absolute;
   z-index: 2147483647;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -9,45 +9,49 @@
   /* background-image 由 JavaScript 动态设置 (chrome.runtime.getURL) */
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-  min-width: 260px;
+  width: min(360px, calc(100vw - 20px));
+  max-height: min(70vh, 560px);
+  box-shadow: 0 14px 44px rgba(2, 6, 23, 0.48);
   min-height: 100px;
 }
 
 /* 蓝色渐变叠加层，降低背景亮度 */
-.to-popup-container::before {
+[data-translate-online-ui="selection-popup"]::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(29,78,216,0.08));
+  background: linear-gradient(135deg, rgba(3, 10, 32, 0.62), rgba(30, 64, 175, 0.34));
   pointer-events: none;
   z-index: 0;
 }
 
-.to-popup-card {
+[data-translate-online-ui="selection-popup"] .to-popup-card {
   position: relative;
   z-index: 1;
   pointer-events: auto;
-  background: rgba(255,255,255,0.78);
+  max-height: calc(min(70vh, 560px) - 16px);
+  overflow-y: auto;
+  color: #eaf5ff;
+  background: linear-gradient(145deg, rgba(8, 24, 56, 0.92), rgba(5, 14, 38, 0.9));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: 14px 16px;
   margin: 8px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-  border: 1px solid rgba(255,255,255,0.4);
+  box-shadow: inset 0 1px rgba(255,255,255,0.1);
+  border: 1px solid rgba(186, 230, 253, 0.26);
 }
 
-.to-popup-header {
+[data-translate-online-ui="selection-popup"] .to-popup-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
 }
 
-.to-popup-lang-tag {
+[data-translate-online-ui="selection-popup"] .to-popup-lang-tag {
   display: inline-block;
-  background: linear-gradient(135deg, #2563EB, #1D4ED8);
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
   color: #fff;
   font-size: 10px;
   font-weight: 600;
@@ -55,74 +59,88 @@
   border-radius: 10px;
 }
 
-.to-popup-header-actions {
+[data-translate-online-ui="selection-popup"] .to-popup-header-actions {
   display: flex;
   gap: 6px;
 }
 
-.to-popup-header-btn {
+[data-translate-online-ui="selection-popup"] .to-popup-header-btn {
   cursor: pointer;
   padding: 3px 6px;
   border-radius: 8px;
-  background: rgba(0,0,0,0.04);
+  color: #dff3ff;
+  background: rgba(147, 197, 253, 0.12);
   font-size: 14px;
   transition: background 0.2s;
   border: none;
   line-height: 1;
 }
-.to-popup-header-btn:hover { background: rgba(0,0,0,0.08); }
+[data-translate-online-ui="selection-popup"] .to-popup-header-btn:hover { background: rgba(56, 189, 248, 0.24); }
+[data-translate-online-ui="selection-popup"] .to-popup-header-btn:focus-visible,
+[data-translate-online-ui="selection-popup"] .to-popup-link:focus-visible {
+  outline: 3px solid rgba(37,99,235,0.28);
+  outline-offset: 2px;
+}
 
-.to-popup-label {
+[data-translate-online-ui="selection-popup"] .to-popup-label {
   font-size: 10px;
-  color: #888;
+  color: #9fbcd8;
   margin-bottom: 2px;
 }
 
-.to-popup-original {
+[data-translate-online-ui="selection-popup"] .to-popup-original {
   font-weight: 600;
-  color: #1a1a1a;
+  color: #f1f8ff;
   word-break: break-word;
   font-size: 13px;
 }
 
-.to-popup-divider {
+[data-translate-online-ui="selection-popup"] .to-popup-divider {
   height: 1px;
-  background: rgba(0,0,0,0.06);
+  background: rgba(186, 230, 253, 0.14);
   margin: 8px 0;
 }
 
-.to-popup-translation-wrap {
+[data-translate-online-ui="selection-popup"] .to-popup-translation-wrap {
   padding: 8px 10px;
-  background: rgba(37,99,235,0.06);
+  background: rgba(56, 189, 248, 0.12);
   border-radius: 10px;
 }
 
-.to-popup-translation {
-  color: #374151;
+[data-translate-online-ui="selection-popup"] .to-popup-translation {
+  color: #d9ecff;
   word-break: break-word;
   font-size: 13px;
 }
 
-.to-popup-loading {
-  color: #999;
+[data-translate-online-ui="selection-popup"] .to-popup-loading {
+  color: #a9c4df;
   font-style: italic;
   font-size: 13px;
 }
 
-.to-popup-error {
+[data-translate-online-ui="selection-popup"] .to-popup-error {
   color: #DC2626;
   font-size: 12px;
 }
 
-.to-popup-link {
-  color: #2563EB;
+[data-translate-online-ui="selection-popup"] .to-popup-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7dd3fc;
   text-decoration: underline;
   cursor: pointer;
+  font-family: inherit;
   font-size: 12px;
 }
 
-.to-popup-note {
+[data-translate-online-ui="selection-popup"] .to-popup-note {
   font-size: 11px;
-  color: #999;
+  color: #9fbcd8;
   margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-translate-online-ui="selection-popup"] .to-popup-header-btn { transition: none; }
 }

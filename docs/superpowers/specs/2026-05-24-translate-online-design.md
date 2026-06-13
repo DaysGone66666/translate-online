@@ -1,5 +1,8 @@
 # Translate Online — Edge 划词翻译扩展设计规格
 
+> 历史设计文档。当前权限、存储、快捷键和请求生命周期以
+> `docs/superpowers/specs/2026-06-07-reliability-accessibility-design.md` 为准。
+
 ## 概述
 
 一款面向 Edge 浏览器（Chromium 扩展）的划词翻译工具。默认使用免费公共翻译 API（无需配置，开箱即用），用户也可自行配置 DeepSeek API Key 获得更高质量的翻译。支持浮窗快速翻译和侧边栏翻译历史两种展示模式。

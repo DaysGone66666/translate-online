@@ -2,15 +2,23 @@
   "manifest_version": 3,
   "name": "Translate Online",
   "version": "1.0.0",
-  "description": "划词翻译工具，支持 DeepSeek API 和免费翻译引擎",
+  "description": "划词与整页翻译工具，支持多种大模型 API 和免费翻译服务",
   "permissions": ["storage", "sidePanel", "contextMenus", "activeTab"],
+  "host_permissions": [
+    "https://api.mymemory.translated.net/*"
+  ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "src/service-worker.js"
+  },
+  "action": {
+    "default_title": "Translate Online",
+    "default_popup": "src/toolbar-popup.html"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content-script.js"],
+      "js": ["src/shared.js", "src/floating-toolbar-core.js", "src/page-translation-core.js", "src/content-script.js"],
       "css": ["src/popup.css"]
     }
   ],
