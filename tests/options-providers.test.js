@@ -169,6 +169,10 @@ test('provider grid CSS defines two-column cards, selection, icons, statuses, an
   assert.match(css, /\.provider-status\.success\s*\{[^}]*background:\s*#22c55e;/s);
   assert.match(css, /\.provider-status\.failed\s*\{[^}]*background:\s*#ef4444;/s);
   assert.match(css, /@media\s*\(max-width:[^)]+\)\s*\{[\s\S]*\.provider-grid\s*\{[^}]*grid-template-columns:\s*1fr;/);
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*680px\)\s*\{[\s\S]*\.provider-search-wrap\s*\{[^}]*flex-basis:\s*auto;/s
+  );
   assert.match(css, /\.provider-card:focus-visible/);
 });
 
