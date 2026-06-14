@@ -7,6 +7,10 @@ const contentScript = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'content-script.js'),
   'utf8'
 );
+const manifest = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'manifest.json'),
+  'utf8'
+));
 
 test('keeps injected page translations visually lightweight', () => {
   const styleBlock = contentScript.match(
@@ -50,7 +54,7 @@ test('skips same-language page results instead of inserting the source text agai
   assert.match(contentScript, /start-page-translation-command/);
 });
 
-test('keeps only a small half-hidden avatar visible until the avatar is hovered', () => {
+test('keeps only a small half-hidden pet card visible until the pet is hovered', () => {
   const toolbarStyle = contentScript.match(
     /\[data-translate-online-ui="floating-toolbar"\] \{([\s\S]*?)\n\}/
   );
@@ -64,13 +68,39 @@ test('keeps only a small half-hidden avatar visible until the avatar is hovered'
   assert.match(contentScript, /data-toolbar-action="sidebar"/);
   assert.match(contentScript, /data-toolbar-action="settings"/);
   assert.doesNotMatch(contentScript, /data-toolbar-drag-handle/);
-  assert.match(contentScript, /width:\s*36px/);
-  assert.match(contentScript, /right:\s*-18px/);
-  assert.match(contentScript, /\.to-toolbar-avatar\s*\{[\s\S]*width:\s*32px/);
+  assert.match(contentScript, /width:\s*64px/);
+  assert.match(contentScript, /height:\s*84px/);
+  assert.match(contentScript, /right:\s*-32px/);
+  assert.match(contentScript, /\.to-toolbar-pet-card\s*\{/);
+  assert.match(contentScript, /data-pet-layer="primary"/);
+  assert.match(contentScript, /data-pet-layer="secondary"/);
+  assert.match(contentScript, /class="to-toolbar-bubble"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(contentScript, /\[data-translate-online-ui="floating-toolbar"\]\[data-open="true"\]/);
   assert.match(contentScript, /\.to-toolbar-action\s*\{[\s\S]*opacity:\s*0/);
   assert.match(contentScript, /avatarButton\.addEventListener\('pointerenter'/);
   assert.doesNotMatch(contentScript, /\[data-translate-online-ui="floating-toolbar"\]:hover/);
+});
+
+test('uses compressed local pet states with fallback and reduced-motion styling', () => {
+  for (const state of ['idle', 'idle-alt', 'hover', 'loading', 'success', 'error']) {
+    assert.match(contentScript, new RegExp(`images/pet/rem-${state}\\.webp`));
+    const assetPath = path.join(__dirname, '..', 'images', 'pet', `rem-${state}.webp`);
+    assert.ok(fs.existsSync(assetPath), `${state} pet asset must exist`);
+    assert.ok(fs.statSync(assetPath).size < 160000, `${state} pet asset must stay below 160KB`);
+  }
+
+  assert.match(contentScript, /images\/page-ball-avatar\.png/);
+  assert.match(contentScript, /@keyframes translate-online-pet-float/);
+  assert.match(
+    contentScript,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation:\s*none/
+  );
+  assert.ok(
+    manifest.web_accessible_resources.some(entry =>
+      entry.resources.includes('images/pet/*')
+    ),
+    'manifest must expose derived pet resources'
+  );
 });
 
 test('drags from the avatar and distinguishes dragging from opening the sidebar', () => {
@@ -82,4 +112,11 @@ test('drags from the avatar and distinguishes dragging from opening the sidebar'
   assert.match(contentScript, /clampToolbarTop/);
   assert.match(contentScript, /STORAGE_KEYS\.FLOATING_TOOLBAR_TOP/);
   assert.match(contentScript, /chrome\.storage\.local\.set/);
+});
+
+test('does not replay success feedback when only toggling translated text visibility', () => {
+  assert.match(
+    contentScript,
+    /function toggleAllTranslations\(\)[\s\S]*setBallState\(BALL_STATES\.DONE,\s*'',\s*false\)/
+  );
 });

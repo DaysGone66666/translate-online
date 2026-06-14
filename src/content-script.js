@@ -17,10 +17,24 @@ const {
 
 const {
   clampToolbarTop,
+  getPetPresentation,
   hasDragDistance
 } = TranslateOnlineFloatingToolbarCore;
 
-const BALL_STATES = Object.freeze({ IDLE: 'idle', LOADING: 'loading', DONE: 'done' });
+const BALL_STATES = Object.freeze({
+  IDLE: 'idle',
+  LOADING: 'loading',
+  DONE: 'done',
+  ERROR: 'error'
+});
+const PET_IMAGE_PATHS = Object.freeze({
+  idle: 'images/pet/rem-idle.webp',
+  'idle-alt': 'images/pet/rem-idle-alt.webp',
+  hover: 'images/pet/rem-hover.webp',
+  loading: 'images/pet/rem-loading.webp',
+  success: 'images/pet/rem-success.webp',
+  error: 'images/pet/rem-error.webp'
+});
 const ORIGINAL_ATTR = 'data-translate-online-original';
 const RESULT_ATTR = 'data-translate-online-result';
 const STATE_ATTR = 'data-translate-online-state';
@@ -29,9 +43,11 @@ const MAX_BATCH_ITEMS = 12;
 const MAX_BATCH_CHARACTERS = 1600;
 const MAX_RATE_LIMIT_RETRIES = 1;
 const RATE_LIMIT_RETRY_DELAY = 1500;
-const TOOLBAR_AVATAR_SIZE = 36;
-const TOOLBAR_MENU_CLEARANCE = 46;
-const TOOLBAR_CLOSE_DELAY = 180;
+const TOOLBAR_PET_HEIGHT = 84;
+const TOOLBAR_MENU_CLEARANCE = 54;
+const TOOLBAR_CLOSE_DELAY = 220;
+const PET_IDLE_ALT_DELAY = 30000;
+const PET_FEEDBACK_DURATION = 3600;
 const isHltvSite = location.hostname === 'hltv.org' || location.hostname.endsWith('.hltv.org');
 
 let autoTranslateEnabled = true;
@@ -55,6 +71,13 @@ let pageTranslationEnabled = false;
 let toolbarDrag = null;
 let toolbarCloseTimer = null;
 let suppressAvatarClick = false;
+let petCurrentLayer = 0;
+let petVisualState = '';
+let petErrorMessage = '';
+let petIdleAlt = false;
+let petIdleTimer = null;
+let petFeedbackTimer = null;
+let petFeedbackState = '';
 
 function nextRequestId(prefix, generation = 0) {
   requestSequence += 1;
@@ -110,7 +133,11 @@ function updateSiteAvailability() {
   closePopup();
   cancelPageTranslation(true);
   clearTimeout(toolbarCloseTimer);
+  clearTimeout(petIdleTimer);
+  clearTimeout(petFeedbackTimer);
   toolbarCloseTimer = null;
+  petIdleTimer = null;
+  petFeedbackTimer = null;
   toolbarDrag = null;
   suppressAvatarClick = false;
   ballEl?.remove();
@@ -301,19 +328,19 @@ chrome.runtime.onMessage.addListener(request => {
 [data-translate-online-ui="floating-toolbar"] {
   box-sizing: border-box;
   position: fixed;
-  right: -18px;
-  top: calc(50% - 18px);
-  width: 36px;
-  height: 36px;
+  right: -32px;
+  top: calc(50% - 42px);
+  width: 64px;
+  height: 84px;
   z-index: 2147483646;
   user-select: none;
   touch-action: none;
-  transition: right 0.2s ease;
+  transition: right 0.24s cubic-bezier(0.2, 0.82, 0.25, 1);
 }
 [data-translate-online-ui="floating-toolbar"][data-open="true"],
 [data-translate-online-ui="floating-toolbar"]:focus-within,
 [data-translate-online-ui="floating-toolbar"][data-dragging="true"] {
-  right: 0;
+  right: 10px;
 }
 [data-translate-online-ui="floating-toolbar"] .to-toolbar-action {
   box-sizing: border-box;
@@ -346,12 +373,6 @@ chrome.runtime.onMessage.addListener(request => {
 [data-translate-online-ui="floating-toolbar"] .to-toolbar-action:focus-visible {
   box-shadow: 0 0 0 3px rgba(125,211,252,0.26), 0 4px 16px rgba(0,0,0,0.24);
 }
-[data-translate-online-ui="floating-toolbar"] .to-toolbar-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--translate-online-rem-avatar) center / cover no-repeat #111827;
-}
 [data-translate-online-ui="floating-toolbar"] [data-toolbar-action="translate"] {
   bottom: calc(100% + 8px);
   color: #dcecff;
@@ -359,12 +380,22 @@ chrome.runtime.onMessage.addListener(request => {
 }
 [data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"] {
   top: 0;
-  width: 36px;
-  height: 36px;
+  width: 64px;
+  height: 84px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  box-shadow: none;
   opacity: 1;
   pointer-events: auto;
   transform: none;
   cursor: grab;
+}
+[data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"]:hover,
+[data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"]:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 [data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"]:active {
   cursor: grabbing;
@@ -381,9 +412,75 @@ chrome.runtime.onMessage.addListener(request => {
   pointer-events: auto;
   transform: translateY(0) scale(1);
 }
-[data-translate-online-ui="floating-toolbar"][data-state="loading"] [data-toolbar-action="translate"] {
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-card {
+  box-sizing: border-box;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  width: 64px;
+  height: 84px;
+  border: 1px solid rgba(186,230,253,0.76);
+  border-radius: 18px;
+  background: #101827;
+  box-shadow:
+    0 10px 28px rgba(2,6,23,0.38),
+    0 0 18px rgba(56,189,248,0.18),
+    inset 0 1px rgba(255,255,255,0.18);
+  animation: translate-online-pet-float 4.2s ease-in-out infinite;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity 0.22s ease, transform 0.3s ease;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-image[data-active="true"] {
+  opacity: 1;
+}
+[data-translate-online-ui="floating-toolbar"][data-open="true"] .to-toolbar-pet-image[data-active="true"],
+[data-translate-online-ui="floating-toolbar"]:focus-within .to-toolbar-pet-image[data-active="true"] {
+  transform: scale(1.08);
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(145deg, rgba(255,255,255,0.18), transparent 34%, transparent 74%, rgba(56,189,248,0.12));
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-bubble {
+  box-sizing: border-box;
+  position: absolute;
+  top: 14px;
+  right: calc(100% + 10px);
+  width: max-content;
+  max-width: min(210px, calc(100vw - 96px));
+  padding: 8px 11px;
+  border: 1px solid rgba(186,230,253,0.3);
+  border-radius: 12px 12px 3px 12px;
+  color: #eef9ff;
+  background: rgba(8,22,42,0.96);
+  box-shadow: 0 9px 24px rgba(2,6,23,0.32);
+  font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-bubble[data-visible="true"] {
+  opacity: 1;
+  transform: translateX(0);
+}
+[data-translate-online-ui="floating-toolbar"][data-visual-state="loading"] .to-toolbar-pet-card {
   border-color: #7dd3fc;
   animation: translate-online-rem-pulse 1s ease-in-out infinite alternate;
+}
+[data-translate-online-ui="floating-toolbar"][data-visual-state="error"] .to-toolbar-pet-card {
+  border-color: rgba(251,113,133,0.82);
+  box-shadow: 0 10px 28px rgba(2,6,23,0.38), 0 0 20px rgba(244,63,94,0.22);
 }
 [data-translate-online-result] {
   box-sizing: border-box;
@@ -428,12 +525,17 @@ chrome.runtime.onMessage.addListener(request => {
   backdrop-filter: blur(16px);
 }
 @keyframes translate-online-rem-pulse {
-  to { box-shadow: 0 0 0 4px rgba(125,211,252,0.16), 0 4px 16px rgba(0,0,0,0.24); }
+  to { box-shadow: 0 0 0 4px rgba(125,211,252,0.16), 0 10px 28px rgba(2,6,23,0.38); }
+}
+@keyframes translate-online-pet-float {
+  50% { transform: translateY(-3px); }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-translate-online-ui="floating-toolbar"],
-  [data-translate-online-ui="floating-toolbar"] .to-toolbar-action { transition: none; }
-  [data-translate-online-ui="floating-toolbar"][data-state="loading"] [data-toolbar-action="translate"] { animation: none; }
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-action,
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-image,
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-bubble { transition: none; }
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-card { animation: none; }
 }
 `;
   document.head.appendChild(style);
@@ -454,16 +556,18 @@ function createBall() {
   ballEl = document.createElement('div');
   ballEl.setAttribute('data-translate-online-ui', 'floating-toolbar');
   ballEl.setAttribute('aria-label', '翻译悬浮工具条');
-  ballEl.style.setProperty(
-    '--translate-online-rem-avatar',
-    `url('${chrome.runtime.getURL('images/page-ball-avatar.png')}')`
-  );
+  const idleImageUrl = chrome.runtime.getURL(PET_IMAGE_PATHS.idle);
   ballEl.innerHTML = `
     <button class="to-toolbar-action" data-toolbar-action="translate" type="button">
       <span aria-hidden="true">译</span>
     </button>
+    <div class="to-toolbar-bubble" role="status" aria-live="polite"></div>
     <button class="to-toolbar-action" data-toolbar-action="sidebar" type="button" aria-label="打开翻译记录">
-      <span class="to-toolbar-avatar" aria-hidden="true"></span>
+      <span class="to-toolbar-pet-card" aria-hidden="true">
+        <img class="to-toolbar-pet-image" data-pet-layer="primary" data-active="true" src="${idleImageUrl}" alt="">
+        <img class="to-toolbar-pet-image" data-pet-layer="secondary" data-active="false" alt="">
+        <span class="to-toolbar-pet-shine"></span>
+      </span>
     </button>
     <button class="to-toolbar-action" data-toolbar-action="settings" type="button" aria-label="打开翻译设置">
       <span aria-hidden="true">⚙</span>
@@ -472,6 +576,20 @@ function createBall() {
   const translateButton = ballEl.querySelector('[data-toolbar-action="translate"]');
   const avatarButton = ballEl.querySelector('[data-toolbar-action="sidebar"]');
   const settingsButton = ballEl.querySelector('[data-toolbar-action="settings"]');
+  const petImages = ballEl.querySelectorAll('.to-toolbar-pet-image');
+
+  petCurrentLayer = 0;
+  petVisualState = 'idle';
+  petErrorMessage = '';
+  petIdleAlt = false;
+  petFeedbackState = '';
+  petImages.forEach(image => {
+    image.addEventListener('error', () => {
+      if (image.dataset.fallbackApplied === 'true') return;
+      image.dataset.fallbackApplied = 'true';
+      image.src = chrome.runtime.getURL('images/page-ball-avatar.png');
+    });
+  });
 
   avatarButton.addEventListener('pointerenter', openToolbarMenu);
   translateButton.addEventListener('pointerenter', cancelToolbarClose);
@@ -508,6 +626,70 @@ function createBall() {
   setBallState(BALL_STATES.IDLE);
 }
 
+function setPetImage(visualState) {
+  if (!ballEl || visualState === petVisualState) return;
+  const layers = ballEl.querySelectorAll('.to-toolbar-pet-image');
+  if (layers.length !== 2) return;
+
+  const nextLayerIndex = petCurrentLayer === 0 ? 1 : 0;
+  const currentLayer = layers[petCurrentLayer];
+  const nextLayer = layers[nextLayerIndex];
+  nextLayer.dataset.fallbackApplied = 'false';
+  nextLayer.dataset.pendingState = visualState;
+
+  const activateLayer = () => {
+    if (
+      !ballEl ||
+      nextLayer.dataset.pendingState !== visualState ||
+      ballEl.dataset.visualState !== visualState
+    ) {
+      return;
+    }
+    currentLayer.dataset.active = 'false';
+    nextLayer.dataset.active = 'true';
+    petCurrentLayer = nextLayerIndex;
+  };
+
+  nextLayer.addEventListener('load', activateLayer, { once: true });
+  nextLayer.src = chrome.runtime.getURL(
+    PET_IMAGE_PATHS[visualState] || PET_IMAGE_PATHS.idle
+  );
+  if (nextLayer.complete && nextLayer.naturalWidth > 0) activateLayer();
+  petVisualState = visualState;
+}
+
+function refreshPetPresentation() {
+  if (!ballEl) return;
+  const businessState = ballState === BALL_STATES.LOADING
+    ? BALL_STATES.LOADING
+    : petFeedbackState || BALL_STATES.IDLE;
+  const presentation = getPetPresentation({
+    businessState,
+    expanded: ballEl.dataset.open === 'true',
+    idleAlt: petIdleAlt,
+    errorMessage: petErrorMessage
+  });
+  const bubble = ballEl.querySelector('.to-toolbar-bubble');
+
+  ballEl.dataset.visualState = presentation.visualState;
+  bubble.textContent = presentation.bubble;
+  bubble.dataset.visible = String(!!presentation.bubble);
+  setPetImage(presentation.visualState);
+}
+
+function resetPetIdleTimer() {
+  clearTimeout(petIdleTimer);
+  petIdleTimer = null;
+  petIdleAlt = false;
+  if (!ballEl || ballState === BALL_STATES.LOADING || petFeedbackState) return;
+  petIdleTimer = setTimeout(() => {
+    petIdleTimer = null;
+    if (!ballEl || ballEl.dataset.open === 'true' || petFeedbackState) return;
+    petIdleAlt = true;
+    refreshPetPresentation();
+  }, PET_IDLE_ALT_DELAY);
+}
+
 function cancelToolbarClose() {
   clearTimeout(toolbarCloseTimer);
   toolbarCloseTimer = null;
@@ -515,7 +697,10 @@ function cancelToolbarClose() {
 
 function openToolbarMenu() {
   cancelToolbarClose();
-  if (ballEl) ballEl.dataset.open = 'true';
+  if (!ballEl) return;
+  ballEl.dataset.open = 'true';
+  resetPetIdleTimer();
+  refreshPetPresentation();
 }
 
 function scheduleToolbarClose() {
@@ -524,6 +709,8 @@ function scheduleToolbarClose() {
     toolbarCloseTimer = null;
     if (!ballEl || ballEl.dataset.dragging === 'true' || ballEl.matches(':focus-within')) return;
     delete ballEl.dataset.open;
+    refreshPetPresentation();
+    resetPetIdleTimer();
   }, TOOLBAR_CLOSE_DELAY);
 }
 
@@ -531,14 +718,38 @@ function blurMouseActivatedButton(event) {
   if (event.detail > 0) event.currentTarget.blur();
 }
 
-function setBallState(state) {
+function setBallState(state, errorMessage = '', showFeedback = true) {
   ballState = state;
   if (!ballEl) return;
+  clearTimeout(petFeedbackTimer);
+  petFeedbackTimer = null;
+  petErrorMessage = state === BALL_STATES.ERROR ? String(errorMessage || '') : '';
+  petFeedbackState = showFeedback &&
+    (state === BALL_STATES.DONE || state === BALL_STATES.ERROR)
+    ? state
+    : '';
   ballEl.dataset.state = state;
   const presentation = getPageBallPresentation(state, showPageTranslations);
   const translateButton = ballEl.querySelector('[data-toolbar-action="translate"]');
   translateButton.setAttribute('aria-label', presentation.ariaLabel);
   translateButton.title = presentation.label;
+  refreshPetPresentation();
+
+  if (petFeedbackState) {
+    petFeedbackTimer = setTimeout(() => {
+      petFeedbackTimer = null;
+      petFeedbackState = '';
+      petErrorMessage = '';
+      if (ballState === BALL_STATES.ERROR) {
+        ballState = BALL_STATES.IDLE;
+        ballEl.dataset.state = BALL_STATES.IDLE;
+      }
+      refreshPetPresentation();
+      resetPetIdleTimer();
+    }, PET_FEEDBACK_DURATION);
+  } else {
+    resetPetIdleTimer();
+  }
 }
 
 function setToolbarTop(top) {
@@ -546,7 +757,7 @@ function setToolbarTop(top) {
   const clampedTop = clampToolbarTop(
     top,
     window.innerHeight,
-    TOOLBAR_AVATAR_SIZE,
+    TOOLBAR_PET_HEIGHT,
     TOOLBAR_MENU_CLEARANCE
   );
   ballEl.style.top = `${clampedTop}px`;
@@ -557,7 +768,7 @@ function loadToolbarTop() {
   chrome.storage.local.get([STORAGE_KEYS.FLOATING_TOOLBAR_TOP], items => {
     if (!ballEl || chrome.runtime.lastError) return;
     const savedTop = Number(items[STORAGE_KEYS.FLOATING_TOOLBAR_TOP]);
-    const defaultTop = (window.innerHeight - TOOLBAR_AVATAR_SIZE) / 2;
+    const defaultTop = (window.innerHeight - TOOLBAR_PET_HEIGHT) / 2;
     setToolbarTop(Number.isFinite(savedTop) ? savedTop : defaultTop);
   });
 }
@@ -627,7 +838,7 @@ function onBallClick() {
   if (now - lastBallClick < 500) return;
   lastBallClick = now;
 
-  if (ballState === BALL_STATES.IDLE) {
+  if (ballState === BALL_STATES.IDLE || ballState === BALL_STATES.ERROR) {
     startPageTranslation();
   } else if (ballState === BALL_STATES.LOADING) {
     cancelPageTranslation(true);
@@ -756,8 +967,9 @@ function processPageRun(run) {
       setBallState(BALL_STATES.IDLE);
       showPageToast('当前页面内容已是目标语言，无需重复翻译');
     } else {
-      setBallState(BALL_STATES.IDLE);
-      showPageToast('页面内容未能完成翻译，请检查网络或翻译设置');
+      const message = '页面内容未能完成翻译，请检查网络或翻译设置';
+      setBallState(BALL_STATES.ERROR, message);
+      showPageToast(message);
     }
   }
 }
@@ -802,8 +1014,10 @@ async function processPageBatch(run, batch, requestId) {
         item.rateLimitRetries = (item.rateLimitRetries || 0) + 1;
         retryItems.push(item);
       } else if (result.error === 'unauthorized') {
-        showPageToast('API Key 无效，请检查设置');
+        const message = 'API Key 无效，请检查设置';
+        showPageToast(message);
         cancelPageTranslation(true);
+        setBallState(BALL_STATES.ERROR, message);
         return;
       } else if (result.error !== 'cancelled') {
         processedTextNodes.delete(item.textNode);
@@ -862,7 +1076,7 @@ function toggleAllTranslations() {
   document.querySelectorAll(`[${RESULT_ATTR}]`).forEach(element => {
     element.hidden = !showPageTranslations;
   });
-  setBallState(BALL_STATES.DONE);
+  setBallState(BALL_STATES.DONE, '', false);
 }
 
 function queueTranslationItems(items) {

@@ -13,8 +13,45 @@
     return Math.hypot(deltaX, deltaY) >= threshold;
   }
 
+  function truncatePetMessage(message, maxLength = 48) {
+    const text = String(message || '').trim();
+    const safeMaxLength = Math.max(1, Number(maxLength) || 48);
+    if (text.length <= safeMaxLength) return text;
+    if (safeMaxLength === 1) return '…';
+    return `${text.slice(0, safeMaxLength - 1)}…`;
+  }
+
+  function getPetPresentation({
+    businessState = 'idle',
+    expanded = false,
+    idleAlt = false,
+    errorMessage = ''
+  } = {}) {
+    if (businessState === 'loading') {
+      return { visualState: 'loading', bubble: '正在翻译...' };
+    }
+    if (businessState === 'error') {
+      return {
+        visualState: 'error',
+        bubble: truncatePetMessage(errorMessage) || '翻译失败，请检查设置'
+      };
+    }
+    if (businessState === 'done') {
+      return { visualState: 'success', bubble: '翻译完成' };
+    }
+    if (expanded) {
+      return { visualState: 'hover', bubble: '需要翻译吗？' };
+    }
+    if (idleAlt) {
+      return { visualState: 'idle-alt', bubble: '' };
+    }
+    return { visualState: 'idle', bubble: '' };
+  }
+
   const api = {
     clampToolbarTop,
+    getPetPresentation,
+    truncatePetMessage,
     hasDragDistance
   };
 
