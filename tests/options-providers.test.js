@@ -119,6 +119,7 @@ test('options HTML exposes the exact provider controls and removes legacy engine
     'provider-custom-model',
     'provider-api-url',
     'btn-test-provider',
+    'provider-test-feedback',
     'provider-console-link',
     'provider-docs-link'
   ]) {
@@ -131,6 +132,15 @@ test('options HTML exposes the exact provider controls and removes legacy engine
   assert.match(html, /id="provider-api-key"[^>]*type="password"[^>]*autocomplete="off"/);
   assert.match(html, /id="provider-api-url"[^>]*type="url"/);
   assert.match(html, /id="btn-test-provider"[^>]*\bdisabled\b/);
+  assert.match(
+    html,
+    /id="provider-test-feedback"[^>]*role="status"[^>]*aria-live="polite"[^>]*hidden/
+  );
+  assert.ok(
+    html.indexOf('id="provider-test-feedback"') <
+      html.indexOf('id="provider-console-link"'),
+    'connection feedback must stay beside the test button'
+  );
   assert.match(html, /id="btn-save"[^>]*\bdisabled\b/);
   assert.match(html, /id="provider-console-link"[^>]*target="_blank"[^>]*rel="noreferrer"/);
   assert.doesNotMatch(html, /name="engine"/);
@@ -168,6 +178,9 @@ test('provider grid CSS defines two-column cards, selection, icons, statuses, an
   assert.match(css, /\.provider-status\.configured\s*\{[^}]*background:\s*#38bdf8;/s);
   assert.match(css, /\.provider-status\.success\s*\{[^}]*background:\s*#22c55e;/s);
   assert.match(css, /\.provider-status\.failed\s*\{[^}]*background:\s*#ef4444;/s);
+  assert.match(css, /\.provider-test-feedback\[data-state="testing"\]/);
+  assert.match(css, /\.provider-test-feedback\[data-state="success"\]/);
+  assert.match(css, /\.provider-test-feedback\[data-state="error"\]/);
   assert.match(css, /@media\s*\(max-width:[^)]+\)\s*\{[\s\S]*\.provider-grid\s*\{[^}]*grid-template-columns:\s*1fr;/);
   assert.match(
     css,
@@ -852,6 +865,37 @@ test('connection test sends the exact message and updates only in-memory status'
   }]);
   assert.equal(state.providerConfigs.custom_openai.connectionStatus, 'success');
   assert.deepEqual(storageCalls, []);
+});
+
+test('connection feedback gives explicit testing, success, and failure messages', () => {
+  assert.deepEqual(
+    options.buildConnectionFeedback('MiMo', 'testing'),
+    {
+      state: 'testing',
+      message: '正在测试 MiMo 连接...'
+    }
+  );
+  assert.deepEqual(
+    options.buildConnectionFeedback('MiMo', 'success'),
+    {
+      state: 'success',
+      message: 'MiMo 连接成功'
+    }
+  );
+  assert.deepEqual(
+    options.buildConnectionFeedback('DeepSeek', 'error', 'API Key 无效'),
+    {
+      state: 'error',
+      message: 'DeepSeek 连接失败：API Key 无效'
+    }
+  );
+  assert.deepEqual(
+    options.buildConnectionFeedback('DeepSeek', 'error'),
+    {
+      state: 'error',
+      message: 'DeepSeek 连接失败'
+    }
+  );
 });
 
 test('connection snapshots contain only fields that affect the tested connection', () => {

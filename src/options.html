@@ -65,7 +65,10 @@
         </div>
 
         <div class="provider-config-actions">
-          <button id="btn-test-provider" class="btn btn-secondary" type="button" disabled>测试连接</button>
+          <div class="provider-test-controls">
+            <button id="btn-test-provider" class="btn btn-secondary" type="button" disabled>测试连接</button>
+            <div id="provider-test-feedback" class="provider-test-feedback" role="status" aria-live="polite" hidden></div>
+          </div>
           <div class="provider-links">
             <a id="provider-console-link" target="_blank" rel="noreferrer" hidden>控制台</a>
             <a id="provider-docs-link" target="_blank" rel="noreferrer" hidden>API 文档</a>

@@ -131,6 +131,30 @@
     };
   }
 
+  function buildConnectionFeedback(displayName, state, detail = '') {
+    const name = String(displayName || '').trim();
+    const message = String(detail || '').trim();
+    if (state === 'testing') {
+      return {
+        state,
+        message: `正在测试 ${name} 连接...`
+      };
+    }
+    if (state === 'success') {
+      return {
+        state,
+        message: `${name} 连接成功`
+      };
+    }
+    if (state === 'error') {
+      return {
+        state,
+        message: `${name} 连接失败${message ? `：${message}` : ''}`
+      };
+    }
+    return { state: 'idle', message: '' };
+  }
+
   function captureProviderValues(state, providerId, values) {
     const provider = getProvider(providerId);
     if (provider.protocol === 'mymemory') return state;
@@ -657,6 +681,23 @@
     setLink(getElement('provider-docs-link'), provider.docsUrl);
     getElement('btn-test-provider').textContent =
       state.free ? '测试免费服务' : '测试连接';
+    if (state.config.connectionStatus === 'success') {
+      setProviderTestFeedback(
+        buildConnectionFeedback(
+          getProviderDisplayName(providerId, state.config),
+          'success'
+        )
+      );
+    } else if (state.config.connectionStatus === 'failed') {
+      setProviderTestFeedback(
+        buildConnectionFeedback(
+          getProviderDisplayName(providerId, state.config),
+          'error'
+        )
+      );
+    } else {
+      clearProviderTestFeedback();
+    }
   }
 
   function captureActiveProviderForm() {
@@ -797,6 +838,9 @@
       testedProviderId,
       providerConfigs[testedProviderId]
     );
+    setProviderTestFeedback(
+      buildConnectionFeedback(testedDisplayName, 'testing')
+    );
     try {
       const result = await runProviderConnectionTest({
         state: getBrowserState(),
@@ -805,12 +849,13 @@
         sendMessage: message => chromeApi.runtime.sendMessage(message)
       });
       renderProviderGrid(getElement('provider-search').value);
-      showStatus(
-        result.ok
-          ? `${testedDisplayName} 连接成功`
-          : result.message || '连接测试失败',
-        result.ok ? 'success' : 'error'
-      );
+      if (selectedProviderId === testedProviderId) {
+        setProviderTestFeedback(buildConnectionFeedback(
+          testedDisplayName,
+          result.ok ? 'success' : 'error',
+          result.ok ? '' : result.message
+        ));
+      }
     } finally {
       button.disabled = false;
       button.textContent = originalText;
@@ -818,6 +863,17 @@
         renderProviderForm(selectedProviderId);
       }
     }
+  }
+
+  function setProviderTestFeedback(feedback) {
+    const element = getElement('provider-test-feedback');
+    element.textContent = feedback.message;
+    element.dataset.state = feedback.state;
+    element.hidden = !feedback.message;
+  }
+
+  function clearProviderTestFeedback() {
+    setProviderTestFeedback({ state: 'idle', message: '' });
   }
 
   function showStatus(message, type) {
@@ -864,6 +920,7 @@
       selectProvider(nextProviderId, true);
     });
     getElement('provider-model-preset').addEventListener('change', () => {
+      clearProviderTestFeedback();
       updateCustomModelState();
       captureActiveProviderForm();
       renderProviderGrid(getElement('provider-search').value);
@@ -875,6 +932,7 @@
       'provider-api-url'
     ]) {
       getElement(id).addEventListener('input', () => {
+        clearProviderTestFeedback();
         captureActiveProviderForm();
         renderProviderGrid(getElement('provider-search').value);
       });
@@ -907,6 +965,7 @@
   }
 
   const api = {
+    buildConnectionFeedback,
     buildConnectionMessage,
     buildProviderCardData,
     captureProviderValues,
