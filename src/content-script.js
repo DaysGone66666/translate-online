@@ -16,8 +16,11 @@ const {
 } = TranslateOnlinePageCore;
 
 const {
+  clampToolbarLeft,
   clampToolbarTop,
+  getDockedToolbarLeft,
   getPetPresentation,
+  getToolbarDockSide,
   hasDragDistance
 } = TranslateOnlineFloatingToolbarCore;
 
@@ -27,14 +30,68 @@ const BALL_STATES = Object.freeze({
   DONE: 'done',
   ERROR: 'error'
 });
-const PET_IMAGE_PATHS = Object.freeze({
-  idle: 'images/pet/rem-idle.webp',
-  'idle-alt': 'images/pet/rem-idle-alt.webp',
-  hover: 'images/pet/rem-hover.webp',
-  loading: 'images/pet/rem-loading.webp',
-  success: 'images/pet/rem-success.webp',
-  error: 'images/pet/rem-error.webp'
+const PET_RIG_BASE_SIZE = Object.freeze({
+  width: 1024,
+  height: 1536
 });
+const PET_RIG_PARTS = Object.freeze([
+  Object.freeze({
+    name: 'body',
+    path: 'images/pet/rem-rig-body.png',
+    x: 292,
+    y: 618,
+    width: 484,
+    height: 794
+  }),
+  Object.freeze({
+    name: 'head-back',
+    path: 'images/pet/rem-rig-head-back.png',
+    x: 197,
+    y: 98,
+    width: 634,
+    height: 599
+  }),
+  Object.freeze({
+    name: 'face-base',
+    path: 'images/pet/rem-rig-face-base.png',
+    x: 345,
+    y: 313,
+    width: 405,
+    height: 390
+  }),
+  Object.freeze({
+    name: 'front-hair',
+    path: 'images/pet/rem-rig-front-hair.png',
+    x: 197,
+    y: 105,
+    width: 517,
+    height: 614
+  }),
+  Object.freeze({
+    name: 'hair-accessory',
+    path: 'images/pet/rem-rig-hair-accessory.png',
+    x: 523,
+    y: 256,
+    width: 308,
+    height: 381
+  }),
+  Object.freeze({
+    name: 'eye-closed',
+    path: 'images/pet/rem-rig-eye-closed.png',
+    x: 459,
+    y: 374,
+    width: 249,
+    height: 227
+  }),
+  Object.freeze({
+    name: 'mouth-open',
+    path: 'images/pet/rem-rig-mouth-open.png',
+    x: 380,
+    y: 507,
+    width: 220,
+    height: 196
+  })
+]);
 const ORIGINAL_ATTR = 'data-translate-online-original';
 const RESULT_ATTR = 'data-translate-online-result';
 const STATE_ATTR = 'data-translate-online-state';
@@ -43,11 +100,96 @@ const MAX_BATCH_ITEMS = 12;
 const MAX_BATCH_CHARACTERS = 1600;
 const MAX_RATE_LIMIT_RETRIES = 1;
 const RATE_LIMIT_RETRY_DELAY = 1500;
-const TOOLBAR_PET_HEIGHT = 84;
-const TOOLBAR_MENU_CLEARANCE = 54;
+const TOOLBAR_WIDTH = 72;
+const TOOLBAR_PET_HEIGHT = 96;
+const TOOLBAR_ACTION_SIZE = 40;
+const TOOLBAR_ACTION_GAP = 8;
+const TOOLBAR_PET_TOP = TOOLBAR_ACTION_SIZE + TOOLBAR_ACTION_GAP;
+const TOOLBAR_SETTINGS_TOP = TOOLBAR_PET_TOP + TOOLBAR_PET_HEIGHT + TOOLBAR_ACTION_GAP;
+const TOOLBAR_HEIGHT = TOOLBAR_SETTINGS_TOP + TOOLBAR_ACTION_SIZE;
+const TOOLBAR_VIEWPORT_MARGIN = 12;
+const TOOLBAR_DOCK_VISIBLE_WIDTH = 40;
+const TOOLBAR_DOCK_TRIGGER_DISTANCE = 80;
+const TOOLBAR_DOCK_REVEAL_OFFSET =
+  TOOLBAR_VIEWPORT_MARGIN + (TOOLBAR_WIDTH - TOOLBAR_DOCK_VISIBLE_WIDTH);
 const TOOLBAR_CLOSE_DELAY = 220;
-const PET_IDLE_ALT_DELAY = 30000;
+const PET_BLINK_DELAY = 12000;
+const PET_BLINK_FRAME_DURATION = 90;
+const PET_TALK_INITIAL_DELAY = 1200;
+const PET_TALK_FRAME_DURATION = 320;
+const PET_DRAG_MAX_ROTATION = 12;
+const PET_DRAG_MAX_SHIFT_X = 6;
+const PET_DRAG_MAX_SHIFT_Y = 7;
+const PET_DRAG_BASE_SCALE = 1.06;
+const PET_DRAG_EXTRA_SCALE = 0.04;
+const PET_STATE_MOTION_PRESETS = Object.freeze({
+  idle: Object.freeze({ rotate: 0, shiftX: 0, shiftY: 0, scale: 1 }),
+  'hover-lite': Object.freeze({ rotate: -1.6, shiftX: 0, shiftY: -3.2, scale: 1.026 }),
+  loading: Object.freeze({ rotate: -1.2, shiftX: 0.5, shiftY: -3.5, scale: 1.05 }),
+  success: Object.freeze({ rotate: -3.5, shiftX: 0, shiftY: -6, scale: 1.095 }),
+  error: Object.freeze({ rotate: 4.4, shiftX: 2.6, shiftY: -1.2, scale: 1.02 }),
+  sleep: Object.freeze({ rotate: 6.2, shiftX: -1.4, shiftY: 4.2, scale: 0.985 }),
+  'tap-react': Object.freeze({ rotate: -5.4, shiftX: 3.2, shiftY: -4.4, scale: 1.09 })
+});
+const PET_TALK_MOTION_PRESETS = Object.freeze({
+  'talk-01': Object.freeze({ rotate: -0.6, shiftX: 0, shiftY: -0.8, scale: 1.025 }),
+  'talk-02': Object.freeze({ rotate: -1.1, shiftX: 0.2, shiftY: -1.8, scale: 1.038 }),
+  'talk-03': Object.freeze({ rotate: -1.8, shiftX: 0.4, shiftY: -3.2, scale: 1.055 }),
+  'talk-04': Object.freeze({ rotate: -1.2, shiftX: 0.2, shiftY: -2.1, scale: 1.04 }),
+  'talk-05': Object.freeze({ rotate: -0.5, shiftX: 0, shiftY: -1, scale: 1.026 })
+});
+const PET_BLINK_MOTION_PRESETS = Object.freeze({
+  'blink-01': Object.freeze({ rotate: 0, shiftX: 0, shiftY: 0, scale: 1 }),
+  'blink-02': Object.freeze({ rotate: 0.5, shiftX: 0, shiftY: 0.5, scale: 0.996 }),
+  'blink-03': Object.freeze({ rotate: 0.9, shiftX: 0, shiftY: 1.4, scale: 0.992 }),
+  'blink-04': Object.freeze({ rotate: 0.4, shiftX: 0, shiftY: 0.7, scale: 0.996 }),
+  'blink-05': Object.freeze({ rotate: 0, shiftX: 0, shiftY: 0.1, scale: 1 })
+});
+const PET_TAP_REACTION_DURATION = 720;
+const PET_SLEEP_DELAY = 45000;
 const PET_FEEDBACK_DURATION = 3600;
+const PET_BLINK_SEQUENCE = Object.freeze([
+  'blink-01',
+  'blink-02',
+  'blink-03',
+  'blink-04',
+  'blink-05'
+]);
+const PET_TALK_SEQUENCE = Object.freeze([
+  'talk-01',
+  'talk-02',
+  'talk-03',
+  'talk-04',
+  'talk-05'
+]);
+const PET_BLINK_EXPRESSION_PRESETS = Object.freeze({
+  'blink-01': Object.freeze({ eyeClosedOpacity: 0, eyeClosedScaleY: 0.98 }),
+  'blink-02': Object.freeze({ eyeClosedOpacity: 0.42, eyeClosedScaleY: 0.99 }),
+  'blink-03': Object.freeze({ eyeClosedOpacity: 1, eyeClosedScaleY: 1 }),
+  'blink-04': Object.freeze({ eyeClosedOpacity: 0.42, eyeClosedScaleY: 0.99 }),
+  'blink-05': Object.freeze({ eyeClosedOpacity: 0, eyeClosedScaleY: 0.98 })
+});
+const PET_TALK_EXPRESSION_PRESETS = Object.freeze({
+  'talk-01': Object.freeze({ mouthOpenOpacity: 0.18, mouthOpenScale: 0.9, mouthOpenShiftY: 1.2 }),
+  'talk-02': Object.freeze({ mouthOpenOpacity: 0.52, mouthOpenScale: 0.96, mouthOpenShiftY: 0.4 }),
+  'talk-03': Object.freeze({ mouthOpenOpacity: 0.96, mouthOpenScale: 1, mouthOpenShiftY: 0 }),
+  'talk-04': Object.freeze({ mouthOpenOpacity: 0.62, mouthOpenScale: 0.97, mouthOpenShiftY: 0.3 }),
+  'talk-05': Object.freeze({ mouthOpenOpacity: 0.24, mouthOpenScale: 0.92, mouthOpenShiftY: 0.9 })
+});
+const PET_IDLE_EXPRESSION_PRESET = Object.freeze({
+  eyeClosedOpacity: 0,
+  eyeClosedScaleY: 0.98,
+  mouthOpenOpacity: 0,
+  mouthOpenScale: 0.9,
+  mouthOpenShiftY: 1.2
+});
+const PET_SLEEP_EXPRESSION_PRESET = Object.freeze({
+  eyeClosedOpacity: 1,
+  eyeClosedScaleY: 1,
+  mouthOpenOpacity: 0,
+  mouthOpenScale: 0.9,
+  mouthOpenShiftY: 1.2
+});
 const isHltvSite = location.hostname === 'hltv.org' || location.hostname.endsWith('.hltv.org');
 
 let autoTranslateEnabled = true;
@@ -71,11 +213,18 @@ let pageTranslationEnabled = false;
 let toolbarDrag = null;
 let toolbarCloseTimer = null;
 let suppressAvatarClick = false;
-let petCurrentLayer = 0;
-let petVisualState = '';
 let petErrorMessage = '';
-let petIdleAlt = false;
-let petIdleTimer = null;
+let petBlinking = false;
+let petBlinkFrame = '';
+let petBlinkDelayTimer = null;
+let petBlinkTimer = null;
+let petTalkInitialTimer = null;
+let petTalkFrameTimer = null;
+let petSpeakingFrame = '';
+let petSleepy = false;
+let petSleepTimer = null;
+let petTapReacting = false;
+let petTapReactionTimer = null;
 let petFeedbackTimer = null;
 let petFeedbackState = '';
 
@@ -133,15 +282,324 @@ function updateSiteAvailability() {
   closePopup();
   cancelPageTranslation(true);
   clearTimeout(toolbarCloseTimer);
-  clearTimeout(petIdleTimer);
-  clearTimeout(petFeedbackTimer);
+  clearPetTimers();
   toolbarCloseTimer = null;
-  petIdleTimer = null;
-  petFeedbackTimer = null;
   toolbarDrag = null;
   suppressAvatarClick = false;
   ballEl?.remove();
   ballEl = null;
+}
+
+function clearPetTimers() {
+  clearTimeout(petBlinkDelayTimer);
+  clearTimeout(petBlinkTimer);
+  clearTimeout(petTalkInitialTimer);
+  clearTimeout(petTalkFrameTimer);
+  clearTimeout(petSleepTimer);
+  clearTimeout(petTapReactionTimer);
+  clearTimeout(petFeedbackTimer);
+  petBlinkDelayTimer = null;
+  petBlinkTimer = null;
+  petTalkInitialTimer = null;
+  petTalkFrameTimer = null;
+  petSleepTimer = null;
+  petTapReactionTimer = null;
+  petFeedbackTimer = null;
+  petBlinking = false;
+  petBlinkFrame = '';
+  petSpeakingFrame = '';
+  petSleepy = false;
+  petTapReacting = false;
+}
+
+function resetPetBlinkState() {
+  clearTimeout(petBlinkDelayTimer);
+  clearTimeout(petBlinkTimer);
+  petBlinkDelayTimer = null;
+  petBlinkTimer = null;
+  petBlinking = false;
+  petBlinkFrame = '';
+}
+
+function resetPetTalkState() {
+  clearTimeout(petTalkInitialTimer);
+  clearTimeout(petTalkFrameTimer);
+  petTalkInitialTimer = null;
+  petTalkFrameTimer = null;
+  petSpeakingFrame = '';
+}
+
+function resetPetSleepState() {
+  clearTimeout(petSleepTimer);
+  petSleepTimer = null;
+  petSleepy = false;
+}
+
+function resetPetTapReactionState() {
+  clearTimeout(petTapReactionTimer);
+  petTapReactionTimer = null;
+  petTapReacting = false;
+}
+
+function canRunPetAmbientAnimation() {
+  return !!ballEl &&
+    ballState !== BALL_STATES.LOADING &&
+    !petFeedbackState &&
+    !petTapReacting;
+}
+
+function canRunCollapsedPetAmbientAnimation() {
+  return canRunPetAmbientAnimation() &&
+    ballEl.dataset.open !== 'true' &&
+    ballEl.dataset.dragging !== 'true';
+}
+
+function canRunExpandedPetAmbientAnimation() {
+  return canRunPetAmbientAnimation() &&
+    ballEl.dataset.open === 'true' &&
+    ballEl.dataset.dragging !== 'true';
+}
+
+function clampPetDragValue(value, min, max) {
+  return Math.min(Math.max(Number(value) || 0, min), max);
+}
+
+function setPetDragMotion(dragOffsetX, dragOffsetY) {
+  if (!ballEl) return;
+  const normalizedX = clampPetDragValue(dragOffsetX / 48, -1, 1);
+  const normalizedY = clampPetDragValue(dragOffsetY / 72, -1, 1);
+  const rotate = clampPetDragValue(
+    normalizedX * PET_DRAG_MAX_ROTATION + normalizedY * 2.5,
+    -PET_DRAG_MAX_ROTATION,
+    PET_DRAG_MAX_ROTATION
+  );
+  const shiftX = clampPetDragValue(
+    normalizedX * PET_DRAG_MAX_SHIFT_X,
+    -PET_DRAG_MAX_SHIFT_X,
+    PET_DRAG_MAX_SHIFT_X
+  );
+  const shiftY = clampPetDragValue(
+    Math.abs(normalizedX) * 2 + Math.max(normalizedY, 0) * PET_DRAG_MAX_SHIFT_Y,
+    -2,
+    PET_DRAG_MAX_SHIFT_Y
+  );
+  const scale = PET_DRAG_BASE_SCALE + Math.abs(normalizedX) * PET_DRAG_EXTRA_SCALE;
+
+  ballEl.style.setProperty('--pet-drag-rotate', `${rotate.toFixed(2)}deg`);
+  ballEl.style.setProperty('--pet-drag-shift-x', `${shiftX.toFixed(2)}px`);
+  ballEl.style.setProperty('--pet-drag-shift-y', `${shiftY.toFixed(2)}px`);
+  ballEl.style.setProperty('--pet-drag-scale', scale.toFixed(3));
+}
+
+function resetPetDragMotion() {
+  if (!ballEl) return;
+  ballEl.style.setProperty('--pet-drag-rotate', '0deg');
+  ballEl.style.setProperty('--pet-drag-shift-x', '0px');
+  ballEl.style.setProperty('--pet-drag-shift-y', '0px');
+  ballEl.style.setProperty('--pet-drag-scale', '1');
+}
+
+function setPetStateMotion(motion) {
+  if (!ballEl) return;
+  const stateMotion = motion || PET_STATE_MOTION_PRESETS.idle;
+  ballEl.style.setProperty('--pet-state-rotate', `${Number(stateMotion.rotate || 0).toFixed(2)}deg`);
+  ballEl.style.setProperty('--pet-state-shift-x', `${Number(stateMotion.shiftX || 0).toFixed(2)}px`);
+  ballEl.style.setProperty('--pet-state-shift-y', `${Number(stateMotion.shiftY || 0).toFixed(2)}px`);
+  ballEl.style.setProperty('--pet-state-scale', `${Number(stateMotion.scale || 1).toFixed(3)}`);
+}
+
+function resetPetStateMotion() {
+  if (!ballEl) return;
+  ballEl.style.setProperty('--pet-state-rotate', '0deg');
+  ballEl.style.setProperty('--pet-state-shift-x', '0px');
+  ballEl.style.setProperty('--pet-state-shift-y', '0px');
+  ballEl.style.setProperty('--pet-state-scale', '1');
+}
+
+function getPetStateMotionPreset(visualState) {
+  const value = String(visualState || '');
+  if (value.startsWith('talk-')) {
+    return PET_TALK_MOTION_PRESETS[value] || PET_TALK_MOTION_PRESETS['talk-01'];
+  }
+  if (value.startsWith('blink-')) {
+    return PET_BLINK_MOTION_PRESETS[value] || PET_BLINK_MOTION_PRESETS['blink-01'];
+  }
+  if (value === 'hover-lite') return PET_STATE_MOTION_PRESETS['hover-lite'];
+  if (value === 'tap-react') return PET_STATE_MOTION_PRESETS['tap-react'];
+  if (value === 'loading') return PET_STATE_MOTION_PRESETS.loading;
+  if (value === 'success') return PET_STATE_MOTION_PRESETS.success;
+  if (value === 'error') return PET_STATE_MOTION_PRESETS.error;
+  if (value === 'sleep') return PET_STATE_MOTION_PRESETS.sleep;
+  return PET_STATE_MOTION_PRESETS.idle;
+}
+
+function applyPetStateMotion(visualState) {
+  setPetStateMotion(getPetStateMotionPreset(visualState));
+}
+
+function getPetExpressionPreset(visualState) {
+  const value = String(visualState || '');
+  if (value.startsWith('blink-')) {
+    return {
+      ...PET_IDLE_EXPRESSION_PRESET,
+      ...PET_BLINK_EXPRESSION_PRESETS[value]
+    };
+  }
+  if (value.startsWith('talk-')) {
+    return {
+      ...PET_IDLE_EXPRESSION_PRESET,
+      ...PET_TALK_EXPRESSION_PRESETS[value]
+    };
+  }
+  if (value === 'sleep') return PET_SLEEP_EXPRESSION_PRESET;
+  return PET_IDLE_EXPRESSION_PRESET;
+}
+
+function setPetRigExpression(expression) {
+  if (!ballEl) return;
+  const eyeClosedOpacity = Number(expression.eyeClosedOpacity || 0);
+  const eyeClosedScaleY = Number(expression.eyeClosedScaleY || 1);
+  const mouthOpenOpacity = Number(expression.mouthOpenOpacity || 0);
+  const mouthOpenScale = Number(expression.mouthOpenScale || 1);
+  const mouthOpenShiftY = Number(expression.mouthOpenShiftY || 0);
+
+  ballEl.style.setProperty('--pet-eye-closed-opacity', eyeClosedOpacity.toFixed(3));
+  ballEl.style.setProperty('--pet-eye-closed-scale-y', eyeClosedScaleY.toFixed(3));
+  ballEl.style.setProperty('--pet-mouth-open-opacity', mouthOpenOpacity.toFixed(3));
+  ballEl.style.setProperty('--pet-mouth-open-scale', mouthOpenScale.toFixed(3));
+  ballEl.style.setProperty('--pet-mouth-open-shift-y', `${mouthOpenShiftY.toFixed(2)}px`);
+}
+
+function resetPetRigExpression() {
+  setPetRigExpression(PET_IDLE_EXPRESSION_PRESET);
+}
+
+function applyPetRigExpression(visualState) {
+  setPetRigExpression(getPetExpressionPreset(visualState));
+}
+
+function runPetBlinkSequence(index = 0) {
+  if (!canRunCollapsedPetAmbientAnimation() || petSleepy) {
+    resetPetBlinkState();
+    refreshPetPresentation();
+    return;
+  }
+  if (index >= PET_BLINK_SEQUENCE.length) {
+    petBlinking = false;
+    petBlinkFrame = '';
+    refreshPetPresentation();
+    schedulePetBlinkCycle();
+    return;
+  }
+  petBlinking = true;
+  petBlinkFrame = PET_BLINK_SEQUENCE[index];
+  refreshPetPresentation();
+  petBlinkTimer = setTimeout(() => {
+    petBlinkTimer = null;
+    runPetBlinkSequence(index + 1);
+  }, PET_BLINK_FRAME_DURATION);
+}
+
+function schedulePetBlinkCycle() {
+  resetPetBlinkState();
+  if (!canRunCollapsedPetAmbientAnimation()) return;
+  petBlinkDelayTimer = setTimeout(() => {
+    petBlinkDelayTimer = null;
+    if (!canRunCollapsedPetAmbientAnimation() || petSleepy) return;
+    runPetBlinkSequence();
+  }, PET_BLINK_DELAY);
+}
+
+function schedulePetSleepCycle() {
+  resetPetSleepState();
+  if (!canRunCollapsedPetAmbientAnimation()) return;
+  petSleepTimer = setTimeout(() => {
+    petSleepTimer = null;
+    if (!canRunCollapsedPetAmbientAnimation()) return;
+    resetPetBlinkState();
+    petSleepy = true;
+    refreshPetPresentation();
+  }, PET_SLEEP_DELAY);
+}
+
+function runPetTalkSequence(index = 0) {
+  if (!canRunExpandedPetAmbientAnimation()) {
+    resetPetTalkState();
+    refreshPetPresentation();
+    return;
+  }
+  if (index >= PET_TALK_SEQUENCE.length) {
+    petSpeakingFrame = '';
+    refreshPetPresentation();
+    return;
+  }
+  petSpeakingFrame = PET_TALK_SEQUENCE[index];
+  refreshPetPresentation();
+  petTalkFrameTimer = setTimeout(() => {
+    petTalkFrameTimer = null;
+    runPetTalkSequence(index + 1);
+  }, PET_TALK_FRAME_DURATION);
+}
+
+function schedulePetTalkLoop(delay = PET_TALK_INITIAL_DELAY) {
+  resetPetTalkState();
+  if (!canRunExpandedPetAmbientAnimation()) return;
+  petTalkInitialTimer = setTimeout(() => {
+    petTalkInitialTimer = null;
+    runPetTalkSequence();
+  }, delay);
+}
+
+function syncPetAmbientTimers() {
+  resetPetBlinkState();
+  resetPetTalkState();
+  resetPetSleepState();
+  if (canRunExpandedPetAmbientAnimation()) {
+    return;
+  }
+  if (canRunCollapsedPetAmbientAnimation()) {
+    schedulePetBlinkCycle();
+    schedulePetSleepCycle();
+  }
+}
+
+function triggerPetTapReaction() {
+  if (!ballEl || ballState === BALL_STATES.LOADING || petFeedbackState) return;
+  resetPetTapReactionState();
+  petTapReacting = true;
+  refreshPetPresentation();
+  petTapReactionTimer = setTimeout(() => {
+    petTapReactionTimer = null;
+    petTapReacting = false;
+    syncPetAmbientTimers();
+    refreshPetPresentation();
+  }, PET_TAP_REACTION_DURATION);
+}
+
+function preloadPetImages() {
+  for (const { path: relativePath } of PET_RIG_PARTS) {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = chrome.runtime.getURL(relativePath);
+  }
+}
+
+function buildPetRigMarkup() {
+  return PET_RIG_PARTS.map(part => {
+    const left = (part.x / PET_RIG_BASE_SIZE.width) * 100;
+    const top = (part.y / PET_RIG_BASE_SIZE.height) * 100;
+    const width = (part.width / PET_RIG_BASE_SIZE.width) * 100;
+    const height = (part.height / PET_RIG_BASE_SIZE.height) * 100;
+    const source = chrome.runtime.getURL(part.path);
+    return `
+        <img
+          class="to-toolbar-pet-part"
+          data-pet-part="${part.name}"
+          src="${source}"
+          style="left:${left.toFixed(6)}%;top:${top.toFixed(6)}%;width:${width.toFixed(6)}%;height:${height.toFixed(6)}%;"
+          alt="">
+    `;
+  }).join('');
 }
 
 // ==================== 划词翻译浮窗 ====================
@@ -328,30 +786,54 @@ chrome.runtime.onMessage.addListener(request => {
 [data-translate-online-ui="floating-toolbar"] {
   box-sizing: border-box;
   position: fixed;
-  right: -32px;
-  top: calc(50% - 42px);
-  width: 64px;
-  height: 84px;
+  --pet-drag-rotate: 0deg;
+  --pet-drag-shift-x: 0px;
+  --pet-drag-shift-y: 0px;
+  --pet-drag-scale: 1;
+  --pet-state-rotate: 0deg;
+  --pet-state-shift-x: 0px;
+  --pet-state-shift-y: 0px;
+  --pet-state-scale: 1;
+  --pet-float-duration: 4.2s;
+  --pet-float-lift: 3px;
+  --pet-float-lift-half: 1.5px;
+  --pet-float-sway: 0px;
+  --pet-float-sway-half: 0px;
+  left: calc(100vw - 84px);
+  top: calc(50% - 96px);
+  width: 72px;
+  height: 192px;
   z-index: 2147483646;
+  pointer-events: auto;
   user-select: none;
   touch-action: none;
-  transition: right 0.24s cubic-bezier(0.2, 0.82, 0.25, 1);
+  transition: transform 0.22s ease;
 }
-[data-translate-online-ui="floating-toolbar"][data-open="true"],
-[data-translate-online-ui="floating-toolbar"]:focus-within,
-[data-translate-online-ui="floating-toolbar"][data-dragging="true"] {
-  right: 10px;
+[data-translate-online-ui="floating-toolbar"][data-visual-state="hover-lite"] {
+  --pet-float-duration: 2.6s;
+  --pet-float-lift: 7px;
+  --pet-float-lift-half: 4px;
+  --pet-float-sway: 1.2px;
+  --pet-float-sway-half: 0.6px;
+}
+[data-translate-online-ui="floating-toolbar"][data-dock="left"][data-open="true"],
+[data-translate-online-ui="floating-toolbar"][data-dock="left"]:focus-within {
+  transform: translateX(${TOOLBAR_DOCK_REVEAL_OFFSET}px);
+}
+[data-translate-online-ui="floating-toolbar"][data-dock="right"][data-open="true"],
+[data-translate-online-ui="floating-toolbar"][data-dock="right"]:focus-within {
+  transform: translateX(-${TOOLBAR_DOCK_REVEAL_OFFSET}px);
 }
 [data-translate-online-ui="floating-toolbar"] .to-toolbar-action {
   box-sizing: border-box;
   appearance: none;
   position: absolute;
-  right: 0;
+  left: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 1px solid rgba(255,255,255,0.13);
   border-radius: 50%;
@@ -374,16 +856,17 @@ chrome.runtime.onMessage.addListener(request => {
   box-shadow: 0 0 0 3px rgba(125,211,252,0.26), 0 4px 16px rgba(0,0,0,0.24);
 }
 [data-translate-online-ui="floating-toolbar"] [data-toolbar-action="translate"] {
-  bottom: calc(100% + 8px);
+  top: 0;
   color: #dcecff;
   transform: translateY(8px) scale(0.84);
 }
 [data-translate-online-ui="floating-toolbar"] [data-toolbar-action="sidebar"] {
-  top: 0;
-  width: 64px;
-  height: 84px;
+  top: 48px;
+  left: 0;
+  width: 72px;
+  height: 96px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   opacity: 1;
@@ -401,7 +884,7 @@ chrome.runtime.onMessage.addListener(request => {
   cursor: grabbing;
 }
 [data-translate-online-ui="floating-toolbar"] [data-toolbar-action="settings"] {
-  top: calc(100% + 8px);
+  top: 152px;
   transform: translateY(-8px) scale(0.84);
 }
 [data-translate-online-ui="floating-toolbar"][data-open="true"] [data-toolbar-action="translate"],
@@ -416,40 +899,67 @@ chrome.runtime.onMessage.addListener(request => {
   box-sizing: border-box;
   position: absolute;
   inset: 0;
-  overflow: hidden;
-  width: 64px;
-  height: 84px;
-  border: 1px solid rgba(186,230,253,0.76);
-  border-radius: 18px;
-  background: #101827;
-  box-shadow:
-    0 10px 28px rgba(2,6,23,0.38),
-    0 0 18px rgba(56,189,248,0.18),
-    inset 0 1px rgba(255,255,255,0.18);
-  animation: translate-online-pet-float 4.2s ease-in-out infinite;
+  overflow: visible;
+  width: 72px;
+  height: 96px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform-origin: center bottom;
+  transform: translate3d(calc(var(--pet-drag-shift-x, 0px) + var(--pet-state-shift-x, 0px)), calc(var(--pet-drag-shift-y, 0px) + var(--pet-state-shift-y, 0px)), 0) rotate(calc(var(--pet-drag-rotate, 0deg) + var(--pet-state-rotate, 0deg))) scale(var(--pet-drag-scale, 1)) scale(var(--pet-state-scale, 1));
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  animation: translate-online-pet-float var(--pet-float-duration, 4.2s) ease-in-out infinite;
 }
-[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-image {
+[data-translate-online-ui="floating-toolbar"][data-dragging="true"] .to-toolbar-pet-card {
+  animation: none;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-stage {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
+  inset: 5px 5px 4px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  filter: drop-shadow(0 3px 8px rgba(15,23,42,0.32));
   transform: scale(1.02);
-  transition: opacity 0.22s ease, transform 0.3s ease;
+  transition: transform 0.3s ease, filter 0.25s ease;
 }
-[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-image[data-active="true"] {
-  opacity: 1;
+[data-translate-online-ui="floating-toolbar"][data-open="true"] .to-toolbar-pet-stage,
+[data-translate-online-ui="floating-toolbar"]:focus-within .to-toolbar-pet-stage {
+  transform: scale(1.05);
 }
-[data-translate-online-ui="floating-toolbar"][data-open="true"] .to-toolbar-pet-image[data-active="true"],
-[data-translate-online-ui="floating-toolbar"]:focus-within .to-toolbar-pet-image[data-active="true"] {
-  transform: scale(1.08);
+[data-translate-online-ui="floating-toolbar"][data-visual-state="hover-lite"] .to-toolbar-pet-stage {
+  animation: translate-online-pet-hover-breathe var(--pet-float-duration, 2.6s) ease-in-out infinite;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-rig {
+  position: relative;
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 1024 / 1536;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-part {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-part[data-pet-part="eye-closed"] {
+  opacity: var(--pet-eye-closed-opacity, 0);
+  transform-origin: center center;
+  transform: scaleY(var(--pet-eye-closed-scale-y, 1));
+  transition: opacity 0.11s ease, transform 0.11s ease;
+}
+[data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-part[data-pet-part="mouth-open"] {
+  opacity: var(--pet-mouth-open-opacity, 0);
+  transform-origin: center center;
+  transform: translate3d(0, var(--pet-mouth-open-shift-y, 0px), 0) scale(var(--pet-mouth-open-scale, 1));
+  transition: opacity 0.11s ease, transform 0.11s ease;
 }
 [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-shine {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(145deg, rgba(255,255,255,0.18), transparent 34%, transparent 74%, rgba(56,189,248,0.12));
+  display: none;
 }
 [data-translate-online-ui="floating-toolbar"] .to-toolbar-bubble {
   box-sizing: border-box;
@@ -474,13 +984,18 @@ chrome.runtime.onMessage.addListener(request => {
   opacity: 1;
   transform: translateX(0);
 }
-[data-translate-online-ui="floating-toolbar"][data-visual-state="loading"] .to-toolbar-pet-card {
-  border-color: #7dd3fc;
+[data-translate-online-ui="floating-toolbar"][data-dock="left"] .to-toolbar-bubble {
+  left: calc(100% + 10px);
+  right: auto;
+  border-radius: 12px 12px 12px 3px;
+  transform: translateX(-8px);
+}
+[data-translate-online-ui="floating-toolbar"][data-visual-state="loading"] .to-toolbar-pet-stage {
+  filter: drop-shadow(0 3px 8px rgba(15,23,42,0.32)) drop-shadow(0 0 12px rgba(125,211,252,0.55));
   animation: translate-online-rem-pulse 1s ease-in-out infinite alternate;
 }
-[data-translate-online-ui="floating-toolbar"][data-visual-state="error"] .to-toolbar-pet-card {
-  border-color: rgba(251,113,133,0.82);
-  box-shadow: 0 10px 28px rgba(2,6,23,0.38), 0 0 20px rgba(244,63,94,0.22);
+[data-translate-online-ui="floating-toolbar"][data-visual-state="error"] .to-toolbar-pet-stage {
+  filter: drop-shadow(0 3px 8px rgba(15,23,42,0.32)) drop-shadow(0 0 10px rgba(244,63,94,0.42));
 }
 [data-translate-online-result] {
   box-sizing: border-box;
@@ -528,14 +1043,36 @@ chrome.runtime.onMessage.addListener(request => {
   to { box-shadow: 0 0 0 4px rgba(125,211,252,0.16), 0 10px 28px rgba(2,6,23,0.38); }
 }
 @keyframes translate-online-pet-float {
-  50% { transform: translateY(-3px); }
+  0%, 100% {
+    transform: translate3d(calc(var(--pet-drag-shift-x, 0px) + var(--pet-state-shift-x, 0px)), calc(var(--pet-drag-shift-y, 0px) + var(--pet-state-shift-y, 0px)), 0) rotate(calc(var(--pet-drag-rotate, 0deg) + var(--pet-state-rotate, 0deg))) scale(var(--pet-drag-scale, 1)) scale(var(--pet-state-scale, 1));
+  }
+  25% {
+    transform: translate3d(calc(var(--pet-drag-shift-x, 0px) + var(--pet-state-shift-x, 0px) + var(--pet-float-sway-half, 0px)), calc(var(--pet-drag-shift-y, 0px) + var(--pet-state-shift-y, 0px) - var(--pet-float-lift-half, 0px)), 0) rotate(calc(var(--pet-drag-rotate, 0deg) + var(--pet-state-rotate, 0deg))) scale(var(--pet-drag-scale, 1)) scale(var(--pet-state-scale, 1));
+  }
+  50% {
+    transform: translate3d(calc(var(--pet-drag-shift-x, 0px) + var(--pet-state-shift-x, 0px) + var(--pet-float-sway, 0px)), calc(var(--pet-drag-shift-y, 0px) + var(--pet-state-shift-y, 0px) - var(--pet-float-lift, 0px)), 0) rotate(calc(var(--pet-drag-rotate, 0deg) + var(--pet-state-rotate, 0deg))) scale(var(--pet-drag-scale, 1)) scale(var(--pet-state-scale, 1));
+  }
+  75% {
+    transform: translate3d(calc(var(--pet-drag-shift-x, 0px) + var(--pet-state-shift-x, 0px) - var(--pet-float-sway-half, 0px)), calc(var(--pet-drag-shift-y, 0px) + var(--pet-state-shift-y, 0px) - var(--pet-float-lift-half, 0px)), 0) rotate(calc(var(--pet-drag-rotate, 0deg) + var(--pet-state-rotate, 0deg))) scale(var(--pet-drag-scale, 1)) scale(var(--pet-state-scale, 1));
+  }
+}
+@keyframes translate-online-pet-hover-breathe {
+  0%, 100% {
+    transform: scale(1.05);
+  }
+  50% {
+    transform: scale(1.075);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-translate-online-ui="floating-toolbar"],
   [data-translate-online-ui="floating-toolbar"] .to-toolbar-action,
-  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-image,
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-card,
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-stage,
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-part,
   [data-translate-online-ui="floating-toolbar"] .to-toolbar-bubble { transition: none; }
-  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-card { animation: none; }
+  [data-translate-online-ui="floating-toolbar"] .to-toolbar-pet-card,
+  [data-translate-online-ui="floating-toolbar"][data-visual-state="loading"] .to-toolbar-pet-stage { animation: none; }
 }
 `;
   document.head.appendChild(style);
@@ -553,10 +1090,11 @@ function showPageToast(message) {
 
 function createBall() {
   if (ballEl || !document.body || !extensionEnabledForCurrentSite()) return;
+  preloadPetImages();
   ballEl = document.createElement('div');
   ballEl.setAttribute('data-translate-online-ui', 'floating-toolbar');
   ballEl.setAttribute('aria-label', '翻译悬浮工具条');
-  const idleImageUrl = chrome.runtime.getURL(PET_IMAGE_PATHS.idle);
+  const petRigMarkup = buildPetRigMarkup();
   ballEl.innerHTML = `
     <button class="to-toolbar-action" data-toolbar-action="translate" type="button">
       <span aria-hidden="true">译</span>
@@ -564,8 +1102,9 @@ function createBall() {
     <div class="to-toolbar-bubble" role="status" aria-live="polite"></div>
     <button class="to-toolbar-action" data-toolbar-action="sidebar" type="button" aria-label="打开翻译记录">
       <span class="to-toolbar-pet-card" aria-hidden="true">
-        <img class="to-toolbar-pet-image" data-pet-layer="primary" data-active="true" src="${idleImageUrl}" alt="">
-        <img class="to-toolbar-pet-image" data-pet-layer="secondary" data-active="false" alt="">
+        <span class="to-toolbar-pet-stage">
+          <span class="to-toolbar-pet-rig">${petRigMarkup}</span>
+        </span>
         <span class="to-toolbar-pet-shine"></span>
       </span>
     </button>
@@ -576,24 +1115,30 @@ function createBall() {
   const translateButton = ballEl.querySelector('[data-toolbar-action="translate"]');
   const avatarButton = ballEl.querySelector('[data-toolbar-action="sidebar"]');
   const settingsButton = ballEl.querySelector('[data-toolbar-action="settings"]');
-  const petImages = ballEl.querySelectorAll('.to-toolbar-pet-image');
+  const petParts = ballEl.querySelectorAll('.to-toolbar-pet-part');
 
-  petCurrentLayer = 0;
-  petVisualState = 'idle';
   petErrorMessage = '';
-  petIdleAlt = false;
+  petBlinking = false;
+  petBlinkFrame = '';
+  petSpeakingFrame = '';
+  petSleepy = false;
+  petTapReacting = false;
   petFeedbackState = '';
-  petImages.forEach(image => {
+  resetPetDragMotion();
+  resetPetStateMotion();
+  resetPetRigExpression();
+  petParts.forEach(image => {
     image.addEventListener('error', () => {
-      if (image.dataset.fallbackApplied === 'true') return;
-      image.dataset.fallbackApplied = 'true';
-      image.src = chrome.runtime.getURL('images/page-ball-avatar.png');
+      image.remove();
     });
   });
 
   avatarButton.addEventListener('pointerenter', openToolbarMenu);
   translateButton.addEventListener('pointerenter', cancelToolbarClose);
   settingsButton.addEventListener('pointerenter', cancelToolbarClose);
+  avatarButton.addEventListener('pointerleave', scheduleToolbarClose);
+  translateButton.addEventListener('pointerleave', scheduleToolbarClose);
+  settingsButton.addEventListener('pointerleave', scheduleToolbarClose);
   ballEl.addEventListener('pointerenter', cancelToolbarClose);
   ballEl.addEventListener('pointerleave', scheduleToolbarClose);
   ballEl.addEventListener('focusin', openToolbarMenu);
@@ -612,6 +1157,7 @@ function createBall() {
       blurMouseActivatedButton(event);
       return;
     }
+    triggerPetTapReaction();
     chrome.runtime.sendMessage({ type: 'open-sidebar' });
     blurMouseActivatedButton(event);
   });
@@ -622,40 +1168,8 @@ function createBall() {
   });
   setupToolbarDragging(avatarButton);
   document.body.appendChild(ballEl);
-  loadToolbarTop();
+  loadToolbarPosition();
   setBallState(BALL_STATES.IDLE);
-}
-
-function setPetImage(visualState) {
-  if (!ballEl || visualState === petVisualState) return;
-  const layers = ballEl.querySelectorAll('.to-toolbar-pet-image');
-  if (layers.length !== 2) return;
-
-  const nextLayerIndex = petCurrentLayer === 0 ? 1 : 0;
-  const currentLayer = layers[petCurrentLayer];
-  const nextLayer = layers[nextLayerIndex];
-  nextLayer.dataset.fallbackApplied = 'false';
-  nextLayer.dataset.pendingState = visualState;
-
-  const activateLayer = () => {
-    if (
-      !ballEl ||
-      nextLayer.dataset.pendingState !== visualState ||
-      ballEl.dataset.visualState !== visualState
-    ) {
-      return;
-    }
-    currentLayer.dataset.active = 'false';
-    nextLayer.dataset.active = 'true';
-    petCurrentLayer = nextLayerIndex;
-  };
-
-  nextLayer.addEventListener('load', activateLayer, { once: true });
-  nextLayer.src = chrome.runtime.getURL(
-    PET_IMAGE_PATHS[visualState] || PET_IMAGE_PATHS.idle
-  );
-  if (nextLayer.complete && nextLayer.naturalWidth > 0) activateLayer();
-  petVisualState = visualState;
 }
 
 function refreshPetPresentation() {
@@ -666,7 +1180,12 @@ function refreshPetPresentation() {
   const presentation = getPetPresentation({
     businessState,
     expanded: ballEl.dataset.open === 'true',
-    idleAlt: petIdleAlt,
+    blinking: petBlinking,
+    blinkFrame: petBlinkFrame,
+    dragging: ballEl.dataset.dragging === 'true',
+    tapping: petTapReacting,
+    sleepy: petSleepy,
+    speakingFrame: petSpeakingFrame,
     errorMessage: petErrorMessage
   });
   const bubble = ballEl.querySelector('.to-toolbar-bubble');
@@ -674,20 +1193,12 @@ function refreshPetPresentation() {
   ballEl.dataset.visualState = presentation.visualState;
   bubble.textContent = presentation.bubble;
   bubble.dataset.visible = String(!!presentation.bubble);
-  setPetImage(presentation.visualState);
+  applyPetStateMotion(presentation.visualState);
+  applyPetRigExpression(presentation.visualState);
 }
 
-function resetPetIdleTimer() {
-  clearTimeout(petIdleTimer);
-  petIdleTimer = null;
-  petIdleAlt = false;
-  if (!ballEl || ballState === BALL_STATES.LOADING || petFeedbackState) return;
-  petIdleTimer = setTimeout(() => {
-    petIdleTimer = null;
-    if (!ballEl || ballEl.dataset.open === 'true' || petFeedbackState) return;
-    petIdleAlt = true;
-    refreshPetPresentation();
-  }, PET_IDLE_ALT_DELAY);
+function resetPetBlinkTimer() {
+  syncPetAmbientTimers();
 }
 
 function cancelToolbarClose() {
@@ -699,7 +1210,7 @@ function openToolbarMenu() {
   cancelToolbarClose();
   if (!ballEl) return;
   ballEl.dataset.open = 'true';
-  resetPetIdleTimer();
+  resetPetBlinkTimer();
   refreshPetPresentation();
 }
 
@@ -710,7 +1221,7 @@ function scheduleToolbarClose() {
     if (!ballEl || ballEl.dataset.dragging === 'true' || ballEl.matches(':focus-within')) return;
     delete ballEl.dataset.open;
     refreshPetPresentation();
-    resetPetIdleTimer();
+    resetPetBlinkTimer();
   }, TOOLBAR_CLOSE_DELAY);
 }
 
@@ -721,6 +1232,10 @@ function blurMouseActivatedButton(event) {
 function setBallState(state, errorMessage = '', showFeedback = true) {
   ballState = state;
   if (!ballEl) return;
+  resetPetBlinkState();
+  resetPetTalkState();
+  resetPetSleepState();
+  resetPetTapReactionState();
   clearTimeout(petFeedbackTimer);
   petFeedbackTimer = null;
   petErrorMessage = state === BALL_STATES.ERROR ? String(errorMessage || '') : '';
@@ -745,11 +1260,51 @@ function setBallState(state, errorMessage = '', showFeedback = true) {
         ballEl.dataset.state = BALL_STATES.IDLE;
       }
       refreshPetPresentation();
-      resetPetIdleTimer();
+      syncPetAmbientTimers();
     }, PET_FEEDBACK_DURATION);
   } else {
-    resetPetIdleTimer();
+    syncPetAmbientTimers();
   }
+}
+
+function setToolbarDock(dockSide) {
+  if (!ballEl) return '';
+  if (dockSide === 'left' || dockSide === 'right') {
+    ballEl.dataset.dock = dockSide;
+    return dockSide;
+  }
+  delete ballEl.dataset.dock;
+  return '';
+}
+
+function detectStoredToolbarDockSide(left) {
+  if (!Number.isFinite(left)) return '';
+  const maxLeft = window.innerWidth - TOOLBAR_WIDTH - TOOLBAR_VIEWPORT_MARGIN;
+  if (left < TOOLBAR_VIEWPORT_MARGIN) return 'left';
+  if (left > maxLeft) return 'right';
+  return '';
+}
+
+function setToolbarLeft(left, dockSide = '') {
+  if (!ballEl) return 0;
+  if (dockSide === 'left' || dockSide === 'right') {
+    const dockedLeft = getDockedToolbarLeft(
+      dockSide,
+      window.innerWidth,
+      TOOLBAR_WIDTH,
+      TOOLBAR_DOCK_VISIBLE_WIDTH
+    );
+    ballEl.style.left = `${dockedLeft}px`;
+    return dockedLeft;
+  }
+  const clampedLeft = clampToolbarLeft(
+    left,
+    window.innerWidth,
+    TOOLBAR_WIDTH,
+    TOOLBAR_VIEWPORT_MARGIN
+  );
+  ballEl.style.left = `${clampedLeft}px`;
+  return clampedLeft;
 }
 
 function setToolbarTop(top) {
@@ -757,42 +1312,57 @@ function setToolbarTop(top) {
   const clampedTop = clampToolbarTop(
     top,
     window.innerHeight,
-    TOOLBAR_PET_HEIGHT,
-    TOOLBAR_MENU_CLEARANCE
+    TOOLBAR_HEIGHT,
+    TOOLBAR_VIEWPORT_MARGIN
   );
   ballEl.style.top = `${clampedTop}px`;
   return clampedTop;
 }
 
-function loadToolbarTop() {
-  chrome.storage.local.get([STORAGE_KEYS.FLOATING_TOOLBAR_TOP], items => {
+function loadToolbarPosition() {
+  chrome.storage.local.get([
+    STORAGE_KEYS.FLOATING_TOOLBAR_LEFT,
+    STORAGE_KEYS.FLOATING_TOOLBAR_TOP
+  ], items => {
     if (!ballEl || chrome.runtime.lastError) return;
+    const savedLeft = Number(items[STORAGE_KEYS.FLOATING_TOOLBAR_LEFT]);
     const savedTop = Number(items[STORAGE_KEYS.FLOATING_TOOLBAR_TOP]);
-    const defaultTop = (window.innerHeight - TOOLBAR_PET_HEIGHT) / 2;
+    const defaultLeft = window.innerWidth - TOOLBAR_WIDTH - TOOLBAR_VIEWPORT_MARGIN;
+    const defaultTop = (window.innerHeight - TOOLBAR_HEIGHT) / 2;
+    const dockSide = detectStoredToolbarDockSide(savedLeft);
+    setToolbarDock(dockSide);
+    setToolbarLeft(Number.isFinite(savedLeft) ? savedLeft : defaultLeft, dockSide);
     setToolbarTop(Number.isFinite(savedTop) ? savedTop : defaultTop);
   });
 }
 
-function saveToolbarTop() {
+function saveToolbarPosition() {
   if (!ballEl) return;
+  const dockSide = ballEl.dataset.dock || '';
+  const left = setToolbarLeft(Number.parseFloat(ballEl.style.left), dockSide);
   const top = setToolbarTop(Number.parseFloat(ballEl.style.top));
-  chrome.storage.local.set({ [STORAGE_KEYS.FLOATING_TOOLBAR_TOP]: top });
+  chrome.storage.local.set({
+    [STORAGE_KEYS.FLOATING_TOOLBAR_LEFT]: left,
+    [STORAGE_KEYS.FLOATING_TOOLBAR_TOP]: top
+  });
 }
 
 function setupToolbarDragging(handle) {
   handle.addEventListener('pointerdown', event => {
     if (!event.isPrimary || event.button !== 0 || !ballEl) return;
+    event.preventDefault();
     cancelToolbarClose();
     openToolbarMenu();
     suppressAvatarClick = false;
+    const rect = ballEl.getBoundingClientRect();
     toolbarDrag = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      startTop: ballEl.getBoundingClientRect().top,
+      startLeft: rect.left,
+      startTop: rect.top,
       moved: false
     };
-    ballEl.dataset.dragging = 'true';
     handle.setPointerCapture(event.pointerId);
   });
 
@@ -807,7 +1377,15 @@ function setupToolbarDragging(handle) {
       );
     }
     if (!toolbarDrag.moved) return;
+    if (ballEl.dataset.dragging !== 'true') {
+      ballEl.dataset.dragging = 'true';
+      syncPetAmbientTimers();
+      refreshPetPresentation();
+    }
+    setPetDragMotion(event.clientX - toolbarDrag.startX, event.clientY - toolbarDrag.startY);
+    delete ballEl.dataset.dock;
     suppressAvatarClick = true;
+    setToolbarLeft(toolbarDrag.startLeft + event.clientX - toolbarDrag.startX);
     setToolbarTop(toolbarDrag.startTop + event.clientY - toolbarDrag.startY);
     event.preventDefault();
   });
@@ -815,9 +1393,26 @@ function setupToolbarDragging(handle) {
   const finishDrag = event => {
     if (!toolbarDrag || event.pointerId !== toolbarDrag.pointerId) return;
     const moved = toolbarDrag.moved;
-    if (moved) saveToolbarTop();
+    if (moved && ballEl) {
+      const currentLeft = Number.parseFloat(ballEl.style.left);
+      const dockSide = getToolbarDockSide(
+        currentLeft,
+        window.innerWidth,
+        TOOLBAR_WIDTH,
+        TOOLBAR_VIEWPORT_MARGIN,
+        TOOLBAR_DOCK_TRIGGER_DISTANCE
+      );
+      setToolbarDock(dockSide);
+      setToolbarLeft(currentLeft, dockSide);
+      saveToolbarPosition();
+    }
     toolbarDrag = null;
-    if (ballEl) delete ballEl.dataset.dragging;
+    if (ballEl) {
+      delete ballEl.dataset.dragging;
+      resetPetDragMotion();
+      refreshPetPresentation();
+      syncPetAmbientTimers();
+    }
     if (handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
     }
@@ -849,6 +1444,11 @@ function onBallClick() {
 
 window.addEventListener('resize', () => {
   if (!ballEl) return;
+  const dockSide = ballEl.dataset.dock || '';
+  setToolbarLeft(
+    Number.parseFloat(ballEl.style.left) || ballEl.getBoundingClientRect().left,
+    dockSide
+  );
   setToolbarTop(ballEl.getBoundingClientRect().top);
 });
 
